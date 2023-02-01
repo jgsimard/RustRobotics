@@ -25,8 +25,40 @@ trait ExtendedKalmanFilter<
     const INPUT_SIZE: usize,
 >
 {
-    fn motion_model(&self, x: Vector<STATE_SIZE>, u: Vector<INPUT_SIZE>, dt: f32) -> Vector<4>;
+    fn motion_model(&self, x: Vector<STATE_SIZE>, u: Vector<INPUT_SIZE>, dt: f32) -> Vector<STATE_SIZE>;
+    
     fn observation_model(&self, x: Vector<STATE_SIZE>) -> Vector<OBSERVATION_SIZE>;
+    
+    fn predict(
+        &self,
+        x_est: Vector<STATE_SIZE>,
+        p_est: Matrix<STATE_SIZE, STATE_SIZE>,
+        u: Vector<INPUT_SIZE>,
+        dt: f32,
+    ) -> (Vector<STATE_SIZE>, Matrix<STATE_SIZE, STATE_SIZE>) {
+        let x_pred = self.motion_model(x_est, u, dt);
+        let j_f = self.jacob_f(x_pred, u, dt);
+        let p_pred = j_f * p_est * j_f.transpose() + self.q();
+        (x_pred, p_pred)
+    }
+
+    fn update(
+        &self,
+        x_pred: Vector<STATE_SIZE>,
+        p_pred: Matrix<STATE_SIZE, STATE_SIZE>,
+        z: Vector<OBSERVATION_SIZE>
+    ) -> (Vector<STATE_SIZE>, Matrix<STATE_SIZE, STATE_SIZE>){
+        let j_h = self.jacob_h();
+        let z_pred = self.observation_model(x_pred);
+        let y = z - z_pred;
+        let s = j_h * p_pred * j_h.transpose() + self.r();
+        let k = p_pred * j_h.transpose() * s.try_inverse().unwrap();
+        let new_x_est = x_pred + k * y;
+        let new_p_est = (Matrix::<STATE_SIZE, STATE_SIZE>::identity() - k * j_h) * p_pred;
+
+        (new_x_est, new_p_est)
+    }
+
     fn estimation(
         &self,
         x_est: Vector<STATE_SIZE>,
@@ -34,7 +66,10 @@ trait ExtendedKalmanFilter<
         z: Vector<OBSERVATION_SIZE>,
         u: Vector<INPUT_SIZE>,
         dt: f32,
-    ) -> (Vector<STATE_SIZE>, Matrix<STATE_SIZE, STATE_SIZE>);
+    ) -> (Vector<STATE_SIZE>, Matrix<STATE_SIZE, STATE_SIZE>){
+        let (x_pred, p_pred) = self.predict(x_est, p_est, u, dt);
+        self.update(x_pred, p_pred, z)
+    }
 
     fn r(&self) -> Matrix<OBSERVATION_SIZE, OBSERVATION_SIZE>;
     fn q(&self) -> Matrix<STATE_SIZE, STATE_SIZE>;
@@ -43,7 +78,7 @@ trait ExtendedKalmanFilter<
     fn jacob_f(
         &self,
         x: Vector<STATE_SIZE>,
-        _u: Vector<OBSERVATION_SIZE>,
+        _u: Vector<INPUT_SIZE>,
         dt: f32,
     ) -> Matrix<STATE_SIZE, STATE_SIZE>;
 
@@ -89,31 +124,6 @@ impl ExtendedKalmanFilter<4, 2, 2> for SimpleProblem {
             1., 0., 0., 0.,
             0., 1., 0., 0.);
         h * x
-    }
-
-    fn estimation(
-        &self,
-        x_est: Vector<4>,
-        p_est: Matrix<4, 4>,
-        z: Vector<2>,
-        u: Vector<2>,
-        dt: f32,
-    ) -> (Vector<4>, Matrix<4, 4>) {
-        // predict
-        let x_pred = self.motion_model(x_est, u, dt);
-        let j_f = self.jacob_f(x_pred, u, dt);
-        let p_pred = j_f * p_est * j_f.transpose() + self.q();
-
-        // update
-        let j_h = self.jacob_h();
-        let z_pred = self.observation_model(x_pred);
-        let y = z - z_pred;
-        let s = j_h * p_pred * j_h.transpose() + self.r();
-        let k = p_pred * j_h.transpose() * s.try_inverse().unwrap();
-        let new_x_est = x_pred + k * y;
-        let new_p_est = (Matrix::<4, 4>::identity() - k * j_h) * p_pred;
-
-        (new_x_est, new_p_est)
     }
 
     fn jacob_f(&self, x: Vector<4>, _u: Vector<2>, dt: f32) -> Matrix<4, 4> {
