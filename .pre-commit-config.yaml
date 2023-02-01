@@ -5,6 +5,7 @@ repos:
     -   id: check-yaml
     -   id: check-toml
     -   id: check-json
+    -   id: check-added-large-files
 -   repo: https://github.com/doublify/pre-commit-rust
     rev: master
     hooks:
