@@ -92,6 +92,8 @@ trait ExtendedKalmanFilter<
 }
 
 struct SimpleProblem {
+    // state
+    // [x, y, yaw, v]
     // motion model
     // x_{t+1} = x_t+v*dt*cos(yaw)
     // y_{t+1} = y_t+v*dt*sin(yaw)
@@ -223,9 +225,9 @@ fn main() {
     let mut z: Vector<2>;
 
     let mut history_z = Vec::new();
-    let mut history_true = Vec::new();
-    let mut history_dr = Vec::new();
-    let mut history_est = Vec::new();
+    let mut history_x_true = Vec::new();
+    let mut history_x_dr = Vec::new();
+    let mut history_x_est = Vec::new();
 
     while time < sim_time {
         time += dt;
@@ -234,17 +236,19 @@ fn main() {
 
         // record step
         history_z.push((z[0] as f64, z[1] as f64));
-        history_true.push((x_true[0] as f64, x_true[1] as f64));
-        history_dr.push((x_dr[0] as f64, x_dr[1] as f64));
-        history_est.push((x_est[0] as f64, x_est[1] as f64));
+        history_x_true.push((x_true[0] as f64, x_true[1] as f64));
+        history_x_dr.push((x_dr[0] as f64, x_dr[1] as f64));
+        history_x_est.push((x_est[0] as f64, x_est[1] as f64));
     }
 
     // PLOT
     let s0: Plot = Plot::new(history_z).point_style(PointStyle::new().colour("#DD3355").size(3.)); // RED
     let s1: Plot =
-        Plot::new(history_true).point_style(PointStyle::new().colour("#0000ff").size(3.)); // blue
-    let s2: Plot = Plot::new(history_dr).point_style(PointStyle::new().colour("#FFFF00").size(3.)); // yellow
-    let s3: Plot = Plot::new(history_est).point_style(PointStyle::new().colour("#35C788").size(3.)); // green
+        Plot::new(history_x_true).point_style(PointStyle::new().colour("#0000ff").size(3.)); // blue
+    let s2: Plot =
+        Plot::new(history_x_dr).point_style(PointStyle::new().colour("#FFFF00").size(3.)); // yellow
+    let s3: Plot =
+        Plot::new(history_x_est).point_style(PointStyle::new().colour("#35C788").size(3.)); // green
 
     let v = ContinuousView::new()
         .add(s0)
