@@ -25,10 +25,15 @@ trait ExtendedKalmanFilter<
     const INPUT_SIZE: usize,
 >
 {
-    fn motion_model(&self, x: Vector<STATE_SIZE>, u: Vector<INPUT_SIZE>, dt: f32) -> Vector<STATE_SIZE>;
-    
+    fn motion_model(
+        &self,
+        x: Vector<STATE_SIZE>,
+        u: Vector<INPUT_SIZE>,
+        dt: f32,
+    ) -> Vector<STATE_SIZE>;
+
     fn observation_model(&self, x: Vector<STATE_SIZE>) -> Vector<OBSERVATION_SIZE>;
-    
+
     fn predict(
         &self,
         x_est: Vector<STATE_SIZE>,
@@ -46,8 +51,8 @@ trait ExtendedKalmanFilter<
         &self,
         x_pred: Vector<STATE_SIZE>,
         p_pred: Matrix<STATE_SIZE, STATE_SIZE>,
-        z: Vector<OBSERVATION_SIZE>
-    ) -> (Vector<STATE_SIZE>, Matrix<STATE_SIZE, STATE_SIZE>){
+        z: Vector<OBSERVATION_SIZE>,
+    ) -> (Vector<STATE_SIZE>, Matrix<STATE_SIZE, STATE_SIZE>) {
         let j_h = self.jacob_h();
         let z_pred = self.observation_model(x_pred);
         let y = z - z_pred;
@@ -66,7 +71,7 @@ trait ExtendedKalmanFilter<
         z: Vector<OBSERVATION_SIZE>,
         u: Vector<INPUT_SIZE>,
         dt: f32,
-    ) -> (Vector<STATE_SIZE>, Matrix<STATE_SIZE, STATE_SIZE>){
+    ) -> (Vector<STATE_SIZE>, Matrix<STATE_SIZE, STATE_SIZE>) {
         let (x_pred, p_pred) = self.predict(x_est, p_est, u, dt);
         self.update(x_pred, p_pred, z)
     }
@@ -210,19 +215,17 @@ fn main() {
     };
 
     let u = Vector::<2>::new(1.0, 0.1);
-    let mut ud : Vector::<2>;
+    let mut ud: Vector<2>;
     let mut x_dr = Vector::<4>::new(0., 0., 0., 0.);
     let mut x_true = Vector::<4>::new(0., 0., 0., 0.);
     let mut x_est = Vector::<4>::new(0., 0., 0., 0.);
     let mut p_est = Matrix::<4, 4>::identity();
-    let mut z : Vector::<2>;
-
+    let mut z: Vector<2>;
 
     let mut history_z = Vec::new();
     let mut history_true = Vec::new();
     let mut history_dr = Vec::new();
     let mut history_est = Vec::new();
-
 
     while time < sim_time {
         time += dt;
