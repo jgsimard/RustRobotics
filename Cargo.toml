@@ -1,5 +1,5 @@
 [package]
-name = "rust_robotics"
+name = "robotics"
 version = "0.1.0"
 edition = "2021"
 
@@ -13,7 +13,7 @@ rand = "0.8"
 rand_distr = "0.4"
 
 [lib]
-name = "rust_robotics"
+name = "robotics"
 crate-type = ["cdylib"]
 
 [[bin]]

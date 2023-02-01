@@ -434,7 +434,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust_robotics"
+name = "robotics"
 version = "0.1.0"
 dependencies = [
  "nalgebra",
