@@ -1,4 +1,7 @@
 img/
-
-
 target/
+
+# fleet
+.cargo/
+fleet.toml
+rust-toolchain.toml
