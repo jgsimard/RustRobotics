@@ -2,6 +2,8 @@ img/
 target/
 
 # fleet
+.idea/
+.fleet/
 .cargo/
 fleet.toml
 rust-toolchain.toml
