@@ -17,9 +17,9 @@ rand_distr = "0.4"
 
 [lib]
 name = "robotics"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "lib"] # cdylib=python, lib=rust
 
-[[bin]]
+[[example]]
 name = "ekf"
-path = "src/localization/extended_kalman_filter.rs"
+path = "examples/localization/extended_kalman_filter.rs"
 
