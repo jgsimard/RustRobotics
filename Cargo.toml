@@ -17,6 +17,7 @@ rand = "0.8"
 rand_distr = "0.4"
 plotters = "0.3"
 
+
 [lib]
 name = "robotics"
 crate-type = ["cdylib", "lib"] # cdylib=python, lib=rust
@@ -24,4 +25,9 @@ crate-type = ["cdylib", "lib"] # cdylib=python, lib=rust
 [[example]]
 name = "ekf"
 path = "examples/localization/extended_kalman_filter.rs"
+
+
+[[example]]
+name = "pf"
+path = "examples/localization/particle_filter.rs"
 

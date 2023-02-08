@@ -2,14 +2,14 @@
 // // author: Atsushi Sakai (@Atsushi_twi)
 // //         Jean-Gabriel Simard (@jgsimard)
 
-use nalgebra::Vector2;
+use nalgebra::{Matrix2, Matrix2x4, Matrix4, Matrix4x2, Vector2, Vector4};
 use plotters::prelude::*;
 use rand_distr::{Distribution, Normal};
 use std::error::Error;
 
 extern crate robotics;
 use robotics::localization::extended_kalman_filter::ExtendedKalmanFilter;
-use robotics::utils::{deg2rad, Matrix, Vector};
+use robotics::utils::deg2rad;
 
 struct SimpleProblem {
     // state
@@ -24,16 +24,16 @@ struct SimpleProblem {
     // dx/dv = dt*cos(yaw)
     // dy/dyaw = v*dt*cos(yaw)
     // dy/dv = dt*sin(yaw)
-    pub gps_noise: Matrix<2, 2>,
-    pub input_noise: Matrix<2, 2>,
-    pub q: Matrix<4, 4>,
-    pub r: Matrix<2, 2>,
+    pub gps_noise: Matrix2<f32>,
+    pub input_noise: Matrix2<f32>,
+    pub q: Matrix4<f32>,
+    pub r: Matrix2<f32>,
 }
 
-impl ExtendedKalmanFilter<4, 2, 2> for SimpleProblem {
-    fn f(&self, _x: Vector<4>, _dt: f32) -> Matrix<4, 4> {
+impl ExtendedKalmanFilter<4, 2, 2, f32> for SimpleProblem {
+    fn f(&self, _x: &Vector4<f32>, _dt: f32) -> Matrix4<f32> {
         #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix::<4,4>::new(
+        Matrix4::<f32>::new(
             1., 0., 0., 0.,
             0., 1., 0., 0.,
             0., 0., 1., 0.,
@@ -41,11 +41,11 @@ impl ExtendedKalmanFilter<4, 2, 2> for SimpleProblem {
         )
     }
 
-    fn b(&self, x: Vector<4>, dt: f32) -> Matrix<4, 2> {
+    fn b(&self, x: &Vector4<f32>, dt: f32) -> Matrix4x2<f32> {
         let yaw = x[2];
 
         #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix::<4, 2>::new(
+        Matrix4x2::<f32>::new(
             dt * (yaw).cos(), 0.,
             dt * (yaw).sin(), 0.,
             0., dt,
@@ -53,19 +53,19 @@ impl ExtendedKalmanFilter<4, 2, 2> for SimpleProblem {
         )
     }
 
-    fn h(&self) -> Matrix<2, 4> {
+    fn h(&self) -> Matrix2x4<f32> {
         #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix::<2,4>::new(
+        Matrix2x4::<f32>::new(
             1., 0., 0., 0.,
             0., 1., 0., 0.
         )
     }
 
-    fn jacob_f(&self, x: Vector<4>, u: Vector<2>, dt: f32) -> Matrix<4, 4> {
+    fn jacob_f(&self, x: &Vector4<f32>, u: &Vector2<f32>, dt: f32) -> Matrix4<f32> {
         let yaw = x[2];
         let v = u[0];
         #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix::<4,4>::new(
+        Matrix4::<f32>::new(
             1., 0., -dt * v * (yaw).sin(), dt * (yaw).cos(),
             0., 1., dt * v * (yaw).cos(), dt * (yaw).sin(),
             0., 0., 1., 0.,
@@ -73,19 +73,19 @@ impl ExtendedKalmanFilter<4, 2, 2> for SimpleProblem {
         )
     }
 
-    fn jacob_h(&self) -> Matrix<2, 4> {
+    fn jacob_h(&self) -> Matrix2x4<f32> {
         #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix::<2,4>::new(
+        Matrix2x4::<f32>::new(
             1., 0., 0., 0.,
             0., 1., 0., 0.
         )
     }
 
-    fn q(&self) -> Matrix<4, 4> {
+    fn q(&self) -> Matrix4<f32> {
         self.q
     }
 
-    fn r(&self) -> Matrix<2, 2> {
+    fn r(&self) -> Matrix2<f32> {
         self.r
     }
 }
@@ -93,11 +93,11 @@ impl ExtendedKalmanFilter<4, 2, 2> for SimpleProblem {
 impl SimpleProblem {
     fn observation(
         &self,
-        x_true: Vector<4>,
-        x_deterministic: Vector<4>,
-        u: Vector<2>,
+        x_true: &Vector4<f32>,
+        x_deterministic: &Vector4<f32>,
+        u: &Vector2<f32>,
         dt: f32,
-    ) -> (Vector<4>, Vector<2>, Vector<4>, Vector<2>) {
+    ) -> (Vector4<f32>, Vector2<f32>, Vector4<f32>, Vector2<f32>) {
         let mut rng = rand::thread_rng();
         let normal = Normal::new(0., 1.).unwrap();
 
@@ -108,25 +108,30 @@ impl SimpleProblem {
         // add noise to gps x-y
         let observation_noise =
             self.gps_noise * Vector2::new(normal.sample(&mut rng), normal.sample(&mut rng));
-        let observation = self.observation_model(x_true_next) + observation_noise;
+        let observation = self.observation_model(&x_true_next) + observation_noise;
 
         // add noise to input
         let u_noise =
             self.input_noise * Vector2::new(normal.sample(&mut rng), normal.sample(&mut rng));
         let ud = u + u_noise;
 
-        let x_deterministic_next = self.motion_model(x_deterministic, ud, dt);
+        let x_deterministic_next = self.motion_model(x_deterministic, &ud, dt);
 
         (x_true_next, observation, x_deterministic_next, ud)
     }
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
+fn run() -> (
+    Vec<(f64, f64)>,
+    Vec<(f64, f64)>,
+    Vec<(f64, f64)>,
+    Vec<(f64, f64)>,
+) {
     let sim_time = 50.0;
     let dt = 0.1;
     let mut time = 0.;
 
-    let mut q = Matrix::<4, 4>::identity();
+    let mut q = Matrix4::<f32>::identity();
     q[(0, 0)] = 0.1; // variance of location on x-axis
     q[(1, 1)] = deg2rad(1.0); // variance of location on y-axis
     q[(2, 2)] = 0.1; // variance of yaw angle
@@ -142,13 +147,13 @@ fn main() -> Result<(), Box<dyn Error>> {
         r,
     };
 
-    let u = Vector::<2>::new(1.0, 0.1);
-    let mut ud: Vector<2>;
-    let mut x_dr = Vector::<4>::new(0., 0., 0., 0.);
-    let mut x_true = Vector::<4>::new(0., 0., 0., 0.);
-    let mut x_est = Vector::<4>::new(0., 0., 0., 0.);
-    let mut p_est = Matrix::<4, 4>::identity();
-    let mut z: Vector<2>;
+    let u = Vector2::<f32>::new(1.0, 0.1);
+    let mut ud: Vector2<f32>;
+    let mut x_dr = Vector4::<f32>::new(0., 0., 0., 0.);
+    let mut x_true = Vector4::<f32>::new(0., 0., 0., 0.);
+    let mut x_est = Vector4::<f32>::new(0., 0., 0., 0.);
+    let mut p_est = Matrix4::<f32>::identity();
+    let mut z: Vector2<f32>;
 
     let mut history_z = Vec::new();
     let mut history_x_true = Vec::new();
@@ -157,8 +162,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     while time < sim_time {
         time += dt;
-        (x_true, z, x_dr, ud) = simple_problem.observation(x_true, x_dr, u, dt);
-        (x_est, p_est) = simple_problem.estimation(x_est, p_est, z, ud, dt);
+        (x_true, z, x_dr, ud) = simple_problem.observation(&x_true, &x_dr, &u, dt);
+        (x_est, p_est) = simple_problem.estimation(&x_est, &p_est, &z, &ud, dt);
 
         // record step
         history_z.push((z[0] as f64, z[1] as f64));
@@ -166,6 +171,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         history_x_dr.push((x_dr[0] as f64, x_dr[1] as f64));
         history_x_est.push((x_est[0] as f64, x_est[1] as f64));
     }
+    (history_z, history_x_true, history_x_dr, history_x_est)
+}
+
+fn main() -> Result<(), Box<dyn Error>> {
+    // get data
+    let (history_z, history_x_true, history_x_dr, history_x_est) = run();
 
     // PLOT : this is very bad :( much better in python
     let root = BitMapBackend::new("./img/ekf.png", (1024, 768)).into_drawing_area();
@@ -224,4 +235,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     println!("Result has been saved to {}", "./img/ekf.png");
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::run;
+
+    #[test]
+    fn it_works() {
+        run();
+    }
 }
