@@ -8,7 +8,7 @@ use rand_distr::{Distribution, Normal};
 use std::error::Error;
 
 extern crate robotics;
-use robotics::localization::extended_kalman_filter::ExtendedKalmanFilter;
+use robotics::localization::extended_kalman_filter::ExtendedKalmanFilterStatic;
 use robotics::utils::deg2rad;
 
 struct SimpleProblem {
@@ -30,7 +30,7 @@ struct SimpleProblem {
     pub r: Matrix2<f32>,
 }
 
-impl ExtendedKalmanFilter<4, 2, 2, f32> for SimpleProblem {
+impl ExtendedKalmanFilterStatic<4, 2, 2, f32> for SimpleProblem {
     fn f(&self, _x: &Vector4<f32>, _dt: f32) -> Matrix4<f32> {
         #[cfg_attr(rustfmt, rustfmt_skip)]
         Matrix4::<f32>::new(
