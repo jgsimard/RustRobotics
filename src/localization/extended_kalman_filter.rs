@@ -1,14 +1,17 @@
 // Extended kalman filter (EKF) localization sample
 // author: Atsushi Sakai (@Atsushi_twi)
 //         Jean-Gabriel Simard (@jgsimard)
+#![allow(non_snake_case)]
 
 use nalgebra::{DMatrix, DVector, SMatrix, SVector};
+
+use crate::utils::{KalmanStateDynamic, KalmanStateStatic};
 
 pub trait ExtendedKalmanFilterStatic<
     const STATE_SIZE: usize,
     const OBSERVATION_SIZE: usize,
     const INPUT_SIZE: usize,
-    T: nalgebra::RealField + nalgebra::Scalar,
+    T: nalgebra::RealField,
 >
 {
     fn motion_model(
@@ -26,45 +29,45 @@ pub trait ExtendedKalmanFilterStatic<
 
     fn predict(
         &self,
-        x_est: &SVector<T, STATE_SIZE>,
-        p_est: &SMatrix<T, STATE_SIZE, STATE_SIZE>,
+        kalman_state_est: &KalmanStateStatic<T, STATE_SIZE>,
         u: &SVector<T, INPUT_SIZE>,
         dt: T,
-    ) -> (SVector<T, STATE_SIZE>, SMatrix<T, STATE_SIZE, STATE_SIZE>) {
-        let x_pred = self.motion_model(x_est, u, dt.clone());
+    ) -> KalmanStateStatic<T, STATE_SIZE> {
+        let x_pred = self.motion_model(&kalman_state_est.x, u, dt.clone());
         let j_f = self.jacob_f(&x_pred, u, dt);
-        let p_pred = j_f.clone() * p_est * j_f.transpose() + self.q();
-        (x_pred, p_pred)
+        let p_pred = &j_f * &kalman_state_est.P * j_f.transpose() + self.q();
+        KalmanStateStatic {
+            x: x_pred,
+            P: p_pred,
+        }
     }
 
     fn update(
         &self,
-        x_pred: &SVector<T, STATE_SIZE>,
-        p_pred: &SMatrix<T, STATE_SIZE, STATE_SIZE>,
+        kalman_state_pred: &KalmanStateStatic<T, STATE_SIZE>,
         z: &SVector<T, OBSERVATION_SIZE>,
-    ) -> (SVector<T, STATE_SIZE>, SMatrix<T, STATE_SIZE, STATE_SIZE>) {
+    ) -> KalmanStateStatic<T, STATE_SIZE> {
+        let x_pred = &kalman_state_pred.x;
+        let p_pred = &kalman_state_pred.P;
         let j_h = self.jacob_h();
         let z_pred = self.observation_model(x_pred);
         let y = z - z_pred;
-        let s = j_h.clone() * p_pred * j_h.transpose() + self.r();
+        let s = &j_h * p_pred * j_h.transpose() + self.r();
         let kalman_gain = p_pred * j_h.transpose() * s.try_inverse().unwrap();
-        let new_x_est = x_pred + kalman_gain.clone() * y;
-        let new_p_est =
-            (SMatrix::<T, STATE_SIZE, STATE_SIZE>::identity() - kalman_gain * j_h) * p_pred;
-
-        (new_x_est, new_p_est)
+        let x_est = x_pred + &kalman_gain * y;
+        let p_est = (SMatrix::<T, STATE_SIZE, STATE_SIZE>::identity() - kalman_gain * j_h) * p_pred;
+        KalmanStateStatic { x: x_est, P: p_est }
     }
 
     fn estimation(
         &self,
-        x_est: &SVector<T, STATE_SIZE>,
-        p_est: &SMatrix<T, STATE_SIZE, STATE_SIZE>,
+        kalman_state_est: &KalmanStateStatic<T, STATE_SIZE>,
         z: &SVector<T, OBSERVATION_SIZE>,
         u: &SVector<T, INPUT_SIZE>,
         dt: T,
-    ) -> (SVector<T, STATE_SIZE>, SMatrix<T, STATE_SIZE, STATE_SIZE>) {
-        let (x_pred, p_pred) = self.predict(x_est, p_est, u, dt);
-        self.update(&x_pred, &p_pred, z)
+    ) -> KalmanStateStatic<T, STATE_SIZE> {
+        let kalman_state_pred = self.predict(kalman_state_est, u, dt);
+        self.update(&kalman_state_pred, z)
     }
 
     fn f(&self, x: &SVector<T, STATE_SIZE>, dt: T) -> SMatrix<T, STATE_SIZE, STATE_SIZE>;
@@ -85,7 +88,7 @@ pub trait ExtendedKalmanFilterStatic<
     fn jacob_h(&self) -> SMatrix<T, OBSERVATION_SIZE, STATE_SIZE>;
 }
 
-pub trait ExtendedKalmanFilterDynamic<T: nalgebra::RealField + nalgebra::Scalar> {
+pub trait ExtendedKalmanFilterDynamic<T: nalgebra::RealField> {
     fn motion_model(&self, x: &DVector<T>, u: &DVector<T>, dt: T) -> DVector<T> {
         self.f(x, dt.clone()) * x + self.b(x, dt) * u
     }
@@ -96,45 +99,46 @@ pub trait ExtendedKalmanFilterDynamic<T: nalgebra::RealField + nalgebra::Scalar>
 
     fn predict(
         &self,
-        x_est: &DVector<T>,
-        p_est: &DMatrix<T>,
+        kalman_state_est: &KalmanStateDynamic<T>,
         u: &DVector<T>,
         dt: T,
-    ) -> (DVector<T>, DMatrix<T>) {
-        let x_pred = self.motion_model(x_est, u, dt.clone());
+    ) -> KalmanStateDynamic<T> {
+        let x_pred = self.motion_model(&kalman_state_est.x, u, dt.clone());
         let j_f = self.jacob_f(&x_pred, u, dt);
-        let p_pred = j_f.clone() * p_est * j_f.transpose() + self.q();
-        (x_pred, p_pred)
+        let p_pred = &j_f * &kalman_state_est.P * j_f.transpose() + self.q();
+        KalmanStateDynamic {
+            x: x_pred,
+            P: p_pred,
+        }
     }
 
     fn update(
         &self,
-        x_pred: &DVector<T>,
-        p_pred: &DMatrix<T>,
+        kalman_state_pred: &KalmanStateDynamic<T>,
         z: &DVector<T>,
-    ) -> (DVector<T>, DMatrix<T>) {
+    ) -> KalmanStateDynamic<T> {
+        let x_pred = &kalman_state_pred.x;
+        let p_pred = &kalman_state_pred.P;
         let j_h = self.jacob_h();
         let z_pred = self.observation_model(x_pred);
         let y = z - z_pred;
         let s = j_h.clone() * p_pred * j_h.transpose() + self.r();
         let kalman_gain = p_pred * j_h.transpose() * s.try_inverse().unwrap();
-        let new_x_est = x_pred + kalman_gain.clone() * y;
-        let shape = p_pred.shape();
-        let new_p_est = (DMatrix::<T>::identity(shape.0, shape.1) - kalman_gain * j_h) * p_pred;
-
-        (new_x_est, new_p_est)
+        let x_est = x_pred + &kalman_gain * y;
+        let shape = kalman_state_pred.P.shape();
+        let p_est = (DMatrix::<T>::identity(shape.0, shape.1) - kalman_gain * j_h) * p_pred;
+        KalmanStateDynamic { x: x_est, P: p_est }
     }
 
     fn estimation(
         &self,
-        x_est: &DVector<T>,
-        p_est: &DMatrix<T>,
+        kalman_state_est: &KalmanStateDynamic<T>,
         z: &DVector<T>,
         u: &DVector<T>,
         dt: T,
-    ) -> (DVector<T>, DMatrix<T>) {
-        let (x_pred, p_pred) = self.predict(x_est, p_est, u, dt);
-        self.update(&x_pred, &p_pred, z)
+    ) -> KalmanStateDynamic<T> {
+        let kalman_state_pred = self.predict(kalman_state_est, u, dt);
+        self.update(&kalman_state_pred, z)
     }
 
     fn f(&self, x: &DVector<T>, dt: T) -> DMatrix<T>;

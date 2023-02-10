@@ -9,11 +9,14 @@ use std::error::Error;
 
 extern crate robotics;
 use robotics::localization::extended_kalman_filter::ExtendedKalmanFilterStatic;
-use robotics::utils::deg2rad;
+use robotics::utils::{deg2rad, KalmanStateStatic};
 
+/// State
+/// [x, y, yaw, v]
+///
+/// Observation
+/// [x,y]
 struct SimpleProblem {
-    // state
-    // [x, y, yaw, v]
     // motion model
     // x_{t+1} = x_t+v*dt*cos(yaw)
     // y_{t+1} = y_t+v*dt*sin(yaw)
@@ -121,21 +124,21 @@ impl SimpleProblem {
     }
 }
 
-fn run() -> (
-    Vec<(f64, f64)>,
-    Vec<(f64, f64)>,
-    Vec<(f64, f64)>,
-    Vec<(f64, f64)>,
-) {
+#[derive(Debug, Default)]
+struct History {
+    pub z: Vec<(f64, f64)>,
+    pub x_true: Vec<(f64, f64)>,
+    pub x_dr: Vec<(f64, f64)>,
+    pub x_est: Vec<(f64, f64)>,
+}
+
+fn run() -> History {
     let sim_time = 50.0;
     let dt = 0.1;
     let mut time = 0.;
 
-    let mut q = Matrix4::<f32>::identity();
-    q[(0, 0)] = 0.1; // variance of location on x-axis
-    q[(1, 1)] = deg2rad(1.0); // variance of location on y-axis
-    q[(2, 2)] = 0.1; // variance of yaw angle
-    q[(3, 3)] = 1.0; // variance of velocity
+    // state : [x, y, yaw, v]
+    let mut q = Matrix4::<f32>::from_diagonal(&Vector4::new(0.1, deg2rad(1.0), 0.1, 1.0));
     q = q * q; // predict state covariance
 
     let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
@@ -151,32 +154,34 @@ fn run() -> (
     let mut ud: Vector2<f32>;
     let mut x_dr = Vector4::<f32>::new(0., 0., 0., 0.);
     let mut x_true = Vector4::<f32>::new(0., 0., 0., 0.);
-    let mut x_est = Vector4::<f32>::new(0., 0., 0., 0.);
-    let mut p_est = Matrix4::<f32>::identity();
+    let mut kalman_state = KalmanStateStatic {
+        x: Vector4::<f32>::new(0., 0., 0., 0.),
+        P: Matrix4::<f32>::identity(),
+    };
     let mut z: Vector2<f32>;
 
-    let mut history_z = Vec::new();
-    let mut history_x_true = Vec::new();
-    let mut history_x_dr = Vec::new();
-    let mut history_x_est = Vec::new();
+    let mut history = History::default();
 
     while time < sim_time {
         time += dt;
         (x_true, z, x_dr, ud) = simple_problem.observation(&x_true, &x_dr, &u, dt);
-        (x_est, p_est) = simple_problem.estimation(&x_est, &p_est, &z, &ud, dt);
+        kalman_state = simple_problem.predict(&kalman_state, &ud, dt);
+        kalman_state = simple_problem.update(&kalman_state, &z);
 
         // record step
-        history_z.push((z[0] as f64, z[1] as f64));
-        history_x_true.push((x_true[0] as f64, x_true[1] as f64));
-        history_x_dr.push((x_dr[0] as f64, x_dr[1] as f64));
-        history_x_est.push((x_est[0] as f64, x_est[1] as f64));
+        history.z.push((z[0] as f64, z[1] as f64));
+        history.x_true.push((x_true[0] as f64, x_true[1] as f64));
+        history.x_dr.push((x_dr[0] as f64, x_dr[1] as f64));
+        history
+            .x_est
+            .push((kalman_state.x[0] as f64, kalman_state.x[1] as f64));
     }
-    (history_z, history_x_true, history_x_dr, history_x_est)
+    history
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
     // get data
-    let (history_z, history_x_true, history_x_dr, history_x_est) = run();
+    let history = run();
 
     // PLOT : this is very bad :( much better in python
     let root = BitMapBackend::new("./img/ekf.png", (1024, 768)).into_drawing_area();
@@ -191,7 +196,8 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     chart
         .draw_series(
-            history_z
+            history
+                .z
                 .iter()
                 .map(|(x, y)| Circle::new((*x, *y), 3, RED.filled())),
         )?
@@ -199,7 +205,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .legend(|(x, y)| Circle::new((x, y), 3, RED.filled()));
     chart
         .draw_series(
-            history_x_true
+            history
+                .x_true
                 .iter()
                 .map(|(x, y)| Circle::new((*x, *y), 3, BLUE.filled())),
         )?
@@ -207,7 +214,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .legend(|(x, y)| Circle::new((x, y), 3, BLUE.filled()));
     chart
         .draw_series(
-            history_x_dr
+            history
+                .x_dr
                 .iter()
                 .map(|(x, y)| Circle::new((*x, *y), 3, YELLOW.filled())),
         )?
@@ -215,7 +223,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         .legend(|(x, y)| Circle::new((x, y), 3, YELLOW.filled()));
     chart
         .draw_series(
-            history_x_est
+            history
+                .x_est
                 .iter()
                 .map(|(x, y)| Circle::new((*x, *y), 3, GREEN.filled())),
         )?
