@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
+    - run: |
+        sudo apt -y install fontconfig
     - uses: PyO3/maturin-action@v1
       with:
         manylinux: auto
