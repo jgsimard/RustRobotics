@@ -16,7 +16,7 @@ jobs:
     - run: |
         sudo apt -y install fontconfig
         sudo apt-get install -y fontconfig-config
-        sudo apt-get install cmake pkg-config libfreetype6-dev libfontconfig1-dev libxcb-xfixes0-dev libxkbcommon-dev python3
+        sudo apt-get install cmake pkg-config libfreetype6-dev libfontconfig-dev libfontconfig1-dev libxcb-xfixes0-dev libxkbcommon-dev python3
     - uses: PyO3/maturin-action@v1
       with:
         manylinux: auto
