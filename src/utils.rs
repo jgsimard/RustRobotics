@@ -13,7 +13,7 @@ pub fn rad2deg(x: f32) -> f32 {
 }
 
 #[derive(Debug)]
-pub struct KalmanStateStatic<T: RealField, const D: usize> {
+pub struct GaussianStateStatic<T: RealField, const D: usize> {
     /// State Vector
     pub x: SVector<T, D>,
     /// Covariance Matrix
@@ -21,18 +21,18 @@ pub struct KalmanStateStatic<T: RealField, const D: usize> {
 }
 
 #[derive(Debug)]
-pub struct KalmanStateDynamic<T: RealField> {
+pub struct GaussianStateDynamic<T: RealField> {
     /// State Vector
     pub x: DVector<T>,
     /// Covariance Matrix
     pub P: DMatrix<T>,
 }
 
-impl<T: RealField> KalmanStateDynamic<T> {
+impl<T: RealField> GaussianStateDynamic<T> {
     #[allow(dead_code)]
-    fn new(x: DVector<T>, P: DMatrix<T>) -> KalmanStateDynamic<T> {
+    fn new(x: DVector<T>, P: DMatrix<T>) -> GaussianStateDynamic<T> {
         assert!(P.is_square());
         assert_eq!(x.shape().0, P.shape().0);
-        KalmanStateDynamic { x, P }
+        GaussianStateDynamic { x, P }
     }
 }

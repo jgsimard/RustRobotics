@@ -9,7 +9,7 @@ use std::error::Error;
 
 extern crate robotics;
 use robotics::localization::extended_kalman_filter::ExtendedKalmanFilterStatic;
-use robotics::utils::{deg2rad, KalmanStateStatic};
+use robotics::utils::{deg2rad, GaussianStateStatic};
 
 /// State
 /// [x, y, yaw, v]
@@ -154,7 +154,7 @@ fn run() -> History {
     let mut ud: Vector2<f32>;
     let mut x_dr = Vector4::<f32>::new(0., 0., 0., 0.);
     let mut x_true = Vector4::<f32>::new(0., 0., 0., 0.);
-    let mut kalman_state = KalmanStateStatic {
+    let mut kalman_state = GaussianStateStatic {
         x: Vector4::<f32>::new(0., 0., 0., 0.),
         P: Matrix4::<f32>::identity(),
     };
