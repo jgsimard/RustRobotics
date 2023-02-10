@@ -29,13 +29,13 @@ pub trait ExtendedKalmanFilterStatic<
 
     fn predict(
         &self,
-        kalman_state_est: &GaussianStateStatic<T, STATE_SIZE>,
+        gaussian_state_est: &GaussianStateStatic<T, STATE_SIZE>,
         u: &SVector<T, INPUT_SIZE>,
         dt: T,
     ) -> GaussianStateStatic<T, STATE_SIZE> {
-        let x_pred = self.motion_model(&kalman_state_est.x, u, dt.clone());
+        let x_pred = self.motion_model(&gaussian_state_est.x, u, dt.clone());
         let j_f = self.jacob_f(&x_pred, u, dt);
-        let p_pred = &j_f * &kalman_state_est.P * j_f.transpose() + self.q();
+        let p_pred = &j_f * &gaussian_state_est.P * j_f.transpose() + self.q();
         GaussianStateStatic {
             x: x_pred,
             P: p_pred,
@@ -44,11 +44,11 @@ pub trait ExtendedKalmanFilterStatic<
 
     fn update(
         &self,
-        kalman_state_pred: &GaussianStateStatic<T, STATE_SIZE>,
+        gaussian_state_pred: &GaussianStateStatic<T, STATE_SIZE>,
         z: &SVector<T, OBSERVATION_SIZE>,
     ) -> GaussianStateStatic<T, STATE_SIZE> {
-        let x_pred = &kalman_state_pred.x;
-        let p_pred = &kalman_state_pred.P;
+        let x_pred = &gaussian_state_pred.x;
+        let p_pred = &gaussian_state_pred.P;
         let j_h = self.jacob_h();
         let z_pred = self.observation_model(x_pred);
         let y = z - z_pred;
@@ -61,13 +61,13 @@ pub trait ExtendedKalmanFilterStatic<
 
     fn estimation(
         &self,
-        kalman_state_est: &GaussianStateStatic<T, STATE_SIZE>,
+        gaussian_state_est: &GaussianStateStatic<T, STATE_SIZE>,
         z: &SVector<T, OBSERVATION_SIZE>,
         u: &SVector<T, INPUT_SIZE>,
         dt: T,
     ) -> GaussianStateStatic<T, STATE_SIZE> {
-        let kalman_state_pred = self.predict(kalman_state_est, u, dt);
-        self.update(&kalman_state_pred, z)
+        let gaussian_state_pred = self.predict(gaussian_state_est, u, dt);
+        self.update(&gaussian_state_pred, z)
     }
 
     fn f(&self, x: &SVector<T, STATE_SIZE>, dt: T) -> SMatrix<T, STATE_SIZE, STATE_SIZE>;
@@ -99,13 +99,13 @@ pub trait ExtendedKalmanFilterDynamic<T: nalgebra::RealField> {
 
     fn predict(
         &self,
-        kalman_state_est: &GaussianStateDynamic<T>,
+        gaussian_state_est: &GaussianStateDynamic<T>,
         u: &DVector<T>,
         dt: T,
     ) -> GaussianStateDynamic<T> {
-        let x_pred = self.motion_model(&kalman_state_est.x, u, dt.clone());
+        let x_pred = self.motion_model(&gaussian_state_est.x, u, dt.clone());
         let j_f = self.jacob_f(&x_pred, u, dt);
-        let p_pred = &j_f * &kalman_state_est.P * j_f.transpose() + self.q();
+        let p_pred = &j_f * &gaussian_state_est.P * j_f.transpose() + self.q();
         GaussianStateDynamic {
             x: x_pred,
             P: p_pred,
@@ -114,31 +114,31 @@ pub trait ExtendedKalmanFilterDynamic<T: nalgebra::RealField> {
 
     fn update(
         &self,
-        kalman_state_pred: &GaussianStateDynamic<T>,
+        gaussian_state_pred: &GaussianStateDynamic<T>,
         z: &DVector<T>,
     ) -> GaussianStateDynamic<T> {
-        let x_pred = &kalman_state_pred.x;
-        let p_pred = &kalman_state_pred.P;
+        let x_pred = &gaussian_state_pred.x;
+        let p_pred = &gaussian_state_pred.P;
         let j_h = self.jacob_h();
         let z_pred = self.observation_model(x_pred);
         let y = z - z_pred;
-        let s = j_h.clone() * p_pred * j_h.transpose() + self.r();
+        let s = &j_h * p_pred * j_h.transpose() + self.r();
         let kalman_gain = p_pred * j_h.transpose() * s.try_inverse().unwrap();
         let x_est = x_pred + &kalman_gain * y;
-        let shape = kalman_state_pred.P.shape();
+        let shape = gaussian_state_pred.P.shape();
         let p_est = (DMatrix::<T>::identity(shape.0, shape.1) - kalman_gain * j_h) * p_pred;
         GaussianStateDynamic { x: x_est, P: p_est }
     }
 
     fn estimation(
         &self,
-        kalman_state_est: &GaussianStateDynamic<T>,
+        gaussian_state_est: &GaussianStateDynamic<T>,
         z: &DVector<T>,
         u: &DVector<T>,
         dt: T,
     ) -> GaussianStateDynamic<T> {
-        let kalman_state_pred = self.predict(kalman_state_est, u, dt);
-        self.update(&kalman_state_pred, z)
+        let gaussian_state_pred = self.predict(gaussian_state_est, u, dt);
+        self.update(&gaussian_state_pred, z)
     }
 
     fn f(&self, x: &DVector<T>, dt: T) -> DMatrix<T>;
