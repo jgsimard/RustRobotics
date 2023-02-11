@@ -3,13 +3,14 @@
 // //         Jean-Gabriel Simard (@jgsimard)
 
 use nalgebra::{Matrix2, Matrix2x4, Matrix4, Matrix4x2, Vector2, Vector4};
+use plotters::coord::Shift;
 use plotters::prelude::*;
 use rand_distr::{Distribution, Normal};
 use std::error::Error;
 
 extern crate robotics;
 use robotics::localization::extended_kalman_filter::ExtendedKalmanFilterStatic;
-use robotics::utils::{deg2rad, GaussianStateStatic};
+use robotics::utils::{deg2rad, ellipse_series, GaussianStateStatic};
 
 /// State
 /// [x, y, yaw, v]
@@ -106,8 +107,6 @@ impl SimpleProblem {
 
         let x_true_next = self.motion_model(x_true, u, dt);
 
-        // let m = nalgebra::base::Matrix::from_distribution_generic(Const::<2>, Const::<1>, &normal, &mut rng);
-
         // add noise to gps x-y
         let observation_noise =
             self.gps_noise * Vector2::new(normal.sample(&mut rng), normal.sample(&mut rng));
@@ -130,6 +129,7 @@ struct History {
     pub x_true: Vec<(f64, f64)>,
     pub x_dr: Vec<(f64, f64)>,
     pub x_est: Vec<(f64, f64)>,
+    pub gaussian_state: Vec<GaussianStateStatic<f32, 4>>,
 }
 
 fn run() -> History {
@@ -138,14 +138,14 @@ fn run() -> History {
     let mut time = 0.;
 
     // state : [x, y, yaw, v]
-    let mut q = Matrix4::<f32>::from_diagonal(&Vector4::new(0.1, deg2rad(1.0), 0.1, 1.0));
+    let mut q = Matrix4::<f32>::from_diagonal(&Vector4::new(0.1, 0.1, deg2rad(1.0), 1.0));
     q = q * q; // predict state covariance
 
     let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
 
     let simple_problem = SimpleProblem {
-        input_noise: nalgebra::Matrix2::new(1., 0., 0., deg2rad(30.0).powi(2)),
-        gps_noise: nalgebra::Matrix2::new(1.0, 0., 0., 1.0),
+        input_noise: Matrix2::new(1., 0., 0., deg2rad(30.0).powi(2)),
+        gps_noise: Matrix2::new(0.25, 0., 0., 0.25),
         q,
         r,
     };
@@ -175,18 +175,16 @@ fn run() -> History {
         history
             .x_est
             .push((kalman_state.x[0] as f64, kalman_state.x[1] as f64));
+        history.gaussian_state.push(kalman_state.clone());
     }
     history
 }
 
-fn main() -> Result<(), Box<dyn Error>> {
-    // get data
-    let history = run();
-
-    // PLOT : this is very bad :( much better in python
-    let root = BitMapBackend::new("./img/ekf.png", (1024, 768)).into_drawing_area();
-    root.fill(&WHITE)?;
-
+fn chart(
+    root: &DrawingArea<BitMapBackend, Shift>,
+    history: &History,
+    i: usize,
+) -> Result<(), Box<dyn Error>> {
     let mut chart = ChartBuilder::on(&root)
         .margin(10)
         .caption("Extended Kalman Filter", ("sans-serif", 40))
@@ -199,6 +197,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             history
                 .z
                 .iter()
+                .take(i)
                 .map(|(x, y)| Circle::new((*x, *y), 3, RED.filled())),
         )?
         .label("observation")
@@ -208,6 +207,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             history
                 .x_true
                 .iter()
+                .take(i)
                 .map(|(x, y)| Circle::new((*x, *y), 3, BLUE.filled())),
         )?
         .label("true position")
@@ -217,6 +217,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             history
                 .x_dr
                 .iter()
+                .take(i)
                 .map(|(x, y)| Circle::new((*x, *y), 3, YELLOW.filled())),
         )?
         .label("no kalman")
@@ -226,22 +227,57 @@ fn main() -> Result<(), Box<dyn Error>> {
             history
                 .x_est
                 .iter()
+                .take(i)
                 .map(|(x, y)| Circle::new((*x, *y), 3, GREEN.filled())),
         )?
         .label("kalman estimate")
         .legend(|(x, y)| Circle::new((x, y), 3, GREEN.filled()));
+
+    // Draw ellipse
+    let state = history.gaussian_state.get(i).unwrap();
+    let p_xy = state.P.fixed_view::<2, 2>(0, 0).clone_owned();
+    let xy = state.x.fixed_view::<2, 1>(0, 0).clone_owned();
+
+    chart.draw_series(
+        ellipse_series(xy, p_xy)
+            .unwrap()
+            .iter()
+            .map(|(x, y)| Circle::new((*x, *y), 3, BLACK.filled())),
+    )?;
 
     chart
         .configure_series_labels()
         .position(SeriesLabelPosition::LowerRight)
         .border_style(BLACK)
         .draw()?;
+    Ok(())
+}
+fn main() -> Result<(), Box<dyn Error>> {
+    // get data
+    let history = run();
+    let len = history.z.len();
 
+    // Plot image
+    let root = BitMapBackend::new("./img/ekf.png", (1024, 768)).into_drawing_area();
+    root.fill(&WHITE)?;
+    chart(&root, &history, len - 1)?;
     // To avoid the IO failure being ignored silently, we manually call the present function
     root.present().expect(
         "Unable to write result to file, please make sure 'img' dir exists under current dir",
     );
     println!("Result has been saved to {}", "./img/ekf.png");
+
+    // Plot GIF
+    let root = BitMapBackend::gif("./img/ekf.gif", (1024, 768), 1)?.into_drawing_area();
+    for i in (0..len).step_by(5) {
+        root.fill(&WHITE)?;
+        chart(&root, &history, i)?;
+        // To avoid the IO failure being ignored silently, we manually call the present function
+        root.present().expect(
+            "Unable to write result to file, please make sure 'img' dir exists under current dir",
+        );
+    }
+    println!("Result has been saved to {}", "./img/ekf.gif");
 
     Ok(())
 }
