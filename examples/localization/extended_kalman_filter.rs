@@ -220,7 +220,7 @@ fn chart(
                 .take(i)
                 .map(|(x, y)| Circle::new((*x, *y), 3, YELLOW.filled())),
         )?
-        .label("no kalman")
+        .label("Dead reckoning")
         .legend(|(x, y)| Circle::new((x, y), 3, YELLOW.filled()));
     chart
         .draw_series(
