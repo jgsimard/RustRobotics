@@ -1,6 +1,10 @@
 #![allow(non_snake_case)]
 
-use nalgebra::{DMatrix, DVector, Matrix2, Matrix3, RealField, SMatrix, SVector, Vector2};
+use nalgebra::allocator::Allocator;
+use nalgebra::{
+    DMatrix, DVector, DefaultAllocator, Dim, Matrix2, Matrix3, OMatrix, OVector, RealField,
+    SMatrix, SVector, Vector2,
+};
 use nalgebra_lapack::Eigen;
 
 pub fn deg2rad(x: f32) -> f32 {
@@ -27,6 +31,18 @@ pub struct GaussianStateDynamic<T: RealField> {
     pub x: DVector<T>,
     /// Covariance Matrix
     pub P: DMatrix<T>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GaussianState<T: RealField, D: Dim>
+where
+    DefaultAllocator: Allocator<T, D>,
+    DefaultAllocator: Allocator<T, D, D>,
+{
+    /// State Vector
+    pub x: OVector<T, D>,
+    /// Covariance Matrix
+    pub P: OMatrix<T, D, D>,
 }
 
 impl<T: RealField> GaussianStateDynamic<T> {

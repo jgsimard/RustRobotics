@@ -2,7 +2,7 @@
 // // author: Atsushi Sakai (@Atsushi_twi)
 // //         Jean-Gabriel Simard (@jgsimard)
 
-use nalgebra::{Matrix2, Matrix2x4, Matrix4, Matrix4x2, Vector2, Vector4};
+use nalgebra::{Matrix2, Matrix2x4, Matrix4, Vector2, Vector4};
 use plotters::coord::Shift;
 use plotters::prelude::*;
 use rand_distr::{Distribution, Normal};
@@ -10,7 +10,13 @@ use std::error::Error;
 
 extern crate robotics;
 use robotics::localization::extended_kalman_filter::ExtendedKalmanFilterStatic;
-use robotics::utils::{deg2rad, ellipse_series, GaussianStateStatic};
+use robotics::utils::GaussianStateStatic as GaussianState;
+use robotics::utils::{deg2rad, ellipse_series};
+
+// To use general ExtendedKalmanFilter
+// use nalgebra::Const;
+// use robotics::localization::extended_kalman_filter::ExtendedKalmanFilter;
+// use robotics::utils::GaussianState;
 
 /// State
 /// [x, y, yaw, v]
@@ -34,38 +40,24 @@ struct SimpleProblem {
     pub r: Matrix2<f32>,
 }
 
-impl ExtendedKalmanFilterStatic<4, 2, 2, f32> for SimpleProblem {
-    fn f(&self, _x: &Vector4<f32>, _dt: f32) -> Matrix4<f32> {
-        #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix4::<f32>::new(
-            1., 0., 0., 0.,
-            0., 1., 0., 0.,
-            0., 0., 1., 0.,
-            0., 0., 0., 1.,
-        )
-    }
-
-    fn b(&self, x: &Vector4<f32>, dt: f32) -> Matrix4x2<f32> {
+// impl ExtendedKalmanFilter<f32, Const<4>, Const<2>, Const<2>> for SimpleProblem {
+impl ExtendedKalmanFilterStatic<f32, 4, 2, 2> for SimpleProblem {
+    fn motion_model(&self, x: &Vector4<f32>, u: &Vector2<f32>, dt: f32) -> Vector4<f32> {
         let yaw = x[2];
-
-        #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix4x2::<f32>::new(
-            dt * (yaw).cos(), 0.,
-            dt * (yaw).sin(), 0.,
-            0., dt,
-            1., 0.
+        let v = x[3];
+        Vector4::new(
+            x.x + yaw.cos() * v * dt,
+            x.y + yaw.sin() * v * dt,
+            yaw + u.y * dt,
+            u.x,
         )
     }
 
-    fn h(&self) -> Matrix2x4<f32> {
-        #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix2x4::<f32>::new(
-            1., 0., 0., 0.,
-            0., 1., 0., 0.
-        )
+    fn observation_model(&self, x: &Vector4<f32>) -> Vector2<f32> {
+        x.xy()
     }
 
-    fn jacob_f(&self, x: &Vector4<f32>, u: &Vector2<f32>, dt: f32) -> Matrix4<f32> {
+    fn jacobian_motion_model(&self, x: &Vector4<f32>, u: &Vector2<f32>, dt: f32) -> Matrix4<f32> {
         let yaw = x[2];
         let v = u[0];
         #[cfg_attr(rustfmt, rustfmt_skip)]
@@ -73,11 +65,11 @@ impl ExtendedKalmanFilterStatic<4, 2, 2, f32> for SimpleProblem {
             1., 0., -dt * v * (yaw).sin(), dt * (yaw).cos(),
             0., 1., dt * v * (yaw).cos(), dt * (yaw).sin(),
             0., 0., 1., 0.,
-            0., 0., 0., 1.,
+            0., 0., 0., 0.,
         )
     }
 
-    fn jacob_h(&self) -> Matrix2x4<f32> {
+    fn jacobian_observation_model(&self) -> Matrix2x4<f32> {
         #[cfg_attr(rustfmt, rustfmt_skip)]
         Matrix2x4::<f32>::new(
             1., 0., 0., 0.,
@@ -129,7 +121,8 @@ struct History {
     pub x_true: Vec<(f64, f64)>,
     pub x_dr: Vec<(f64, f64)>,
     pub x_est: Vec<(f64, f64)>,
-    pub gaussian_state: Vec<GaussianStateStatic<f32, 4>>,
+    // pub gaussian_state: Vec<GaussianState<f32, Const<4>>>,
+    pub gaussian_state: Vec<GaussianState<f32, 4>>,
 }
 
 fn run() -> History {
@@ -154,7 +147,7 @@ fn run() -> History {
     let mut ud: Vector2<f32>;
     let mut x_dr = Vector4::<f32>::new(0., 0., 0., 0.);
     let mut x_true = Vector4::<f32>::new(0., 0., 0., 0.);
-    let mut kalman_state = GaussianStateStatic {
+    let mut kalman_state = GaussianState {
         x: Vector4::<f32>::new(0., 0., 0., 0.),
         P: Matrix4::<f32>::identity(),
     };
