@@ -28,18 +28,16 @@ pub trait ExtendedKalmanFilterStatic<T: RealField, const S: usize, const Z: usiz
 
     fn update(
         &self,
-        gaussian_state_pred: &GaussianStateStatic<T, S>,
+        prediction: &GaussianStateStatic<T, S>,
         z: &SVector<T, Z>,
     ) -> GaussianStateStatic<T, S> {
-        let x_pred = &gaussian_state_pred.x;
-        let p_pred = &gaussian_state_pred.P;
         let j_h = self.jacobian_observation_model();
-        let z_pred = self.observation_model(x_pred);
+        let z_pred = self.observation_model(&prediction.x);
         let y = z - z_pred;
-        let s = &j_h * p_pred * j_h.transpose() + self.r();
-        let kalman_gain = p_pred * j_h.transpose() * s.try_inverse().unwrap();
-        let x_est = x_pred + &kalman_gain * y;
-        let p_est = (SMatrix::<T, S, S>::identity() - kalman_gain * j_h) * p_pred;
+        let s = &j_h * &prediction.P * j_h.transpose() + self.r();
+        let kalman_gain = &prediction.P * j_h.transpose() * s.try_inverse().unwrap();
+        let x_est = &prediction.x + &kalman_gain * y;
+        let p_est = (SMatrix::<T, S, S>::identity() - kalman_gain * j_h) * &prediction.P;
         GaussianStateStatic { x: x_est, P: p_est }
     }
 
@@ -107,7 +105,7 @@ pub trait ExtendedKalmanFilterDynamic<T: RealField> {
 pub trait ExtendedKalmanFilter<T: RealField, S: Dim, Z: Dim, U: Dim> {
     fn predict(
         &self,
-        gaussian_state_est: &GaussianState<T, S>,
+        estimate: &GaussianState<T, S>,
         u: &OVector<T, U>,
         dt: T,
     ) -> GaussianState<T, S>
@@ -115,16 +113,16 @@ pub trait ExtendedKalmanFilter<T: RealField, S: Dim, Z: Dim, U: Dim> {
         DefaultAllocator:
             Allocator<T, U> + Allocator<T, S> + Allocator<T, S, S> + Allocator<T, S, U>,
     {
-        let x_pred = self.motion_model(&gaussian_state_est.x, u, dt.clone());
+        let x_pred = self.motion_model(&estimate.x, u, dt.clone());
         let j_f = self.jacobian_motion_model(&x_pred, u, dt);
-        let p_pred = &j_f * &gaussian_state_est.P * j_f.transpose() + self.q();
+        let p_pred = &j_f * &estimate.P * j_f.transpose() + self.q();
         GaussianState {
             x: x_pred,
             P: p_pred,
         }
     }
 
-    fn update(&self, estimate: &GaussianState<T, S>, z: &OVector<T, Z>) -> GaussianState<T, S>
+    fn update(&self, prediction: &GaussianState<T, S>, z: &OVector<T, Z>) -> GaussianState<T, S>
     where
         DefaultAllocator: Allocator<T, Z>
             + Allocator<T, S>
@@ -134,13 +132,13 @@ pub trait ExtendedKalmanFilter<T: RealField, S: Dim, Z: Dim, U: Dim> {
             + Allocator<T, S, Z>,
     {
         let j_h = self.jacobian_observation_model();
-        let z_pred = self.observation_model(&estimate.x);
+        let z_pred = self.observation_model(&prediction.x);
         let y = z - z_pred;
-        let s = &j_h * &estimate.P * j_h.transpose() + self.r();
-        let kalman_gain = &estimate.P * j_h.transpose() * s.try_inverse().unwrap();
-        let x_est = &estimate.x + &kalman_gain * y;
-        let ps = &estimate.P.shape_generic();
-        let p_est = (OMatrix::identity_generic(ps.0, ps.1) - kalman_gain * j_h) * &estimate.P;
+        let s = &j_h * &prediction.P * j_h.transpose() + self.r();
+        let kalman_gain = &prediction.P * j_h.transpose() * s.try_inverse().unwrap();
+        let x_est = &prediction.x + &kalman_gain * y;
+        let ps = &prediction.P.shape_generic();
+        let p_est = (OMatrix::identity_generic(ps.0, ps.1) - kalman_gain * j_h) * &prediction.P;
         GaussianState { x: x_est, P: p_est }
     }
 
