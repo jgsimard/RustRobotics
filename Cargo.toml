@@ -13,7 +13,6 @@ repository = "https://github.com/jgsimard/RustRobotics"
 [dependencies]
 pyo3 = { version = "0.18", features = ["extension-module"] }
 nalgebra = { version = "0.32", features = ["rand"] }
-nalgebra-lapack = "0.24.0"
 numpy = "0.18"
 rand = "0.8"
 rand_distr = "0.4"
