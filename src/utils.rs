@@ -5,7 +5,6 @@ use nalgebra::{
     DMatrix, DVector, DefaultAllocator, Dim, Matrix2, Matrix3, OMatrix, OVector, RealField,
     SMatrix, SVector, Vector2,
 };
-use nalgebra_lapack::Eigen;
 
 pub fn deg2rad(x: f32) -> f32 {
     const DEG2RAD_FACTOR: f32 = std::f32::consts::PI / 180.0;
@@ -55,9 +54,10 @@ impl<T: RealField> GaussianStateDynamic<T> {
 }
 
 pub fn ellipse_series(xy: Vector2<f32>, p_xy: Matrix2<f32>) -> Option<Vec<(f64, f64)>> {
-    let eigen = Eigen::new(p_xy, false, true)?;
-    let eigenvectors = eigen.eigenvectors?;
-    let eigenvalues = eigen.eigenvalues_re;
+    let eigen = p_xy.symmetric_eigen();
+    let eigenvectors = eigen.eigenvectors;
+    let eigenvalues = eigen.eigenvalues;
+
     let (a, b, angle) = if eigenvalues.x >= eigenvalues.y {
         (
             eigenvalues.x.sqrt(),
