@@ -1,43 +1,46 @@
 # RustRobotics
 
-This package is a rust implementation of [PythonRobotics](https://github.com/AtsushiSakai/PythonRobotics). I plan to have algorithms implementations in the `src` folder and the algorithms use cases in the `examples` folder. I plan to have python bindings using [pyo3](https://github.com/PyO3/pyo3)/[maturin](https://github.com/PyO3/maturin).
+This package is a rust implementation of robotics algorithms. So far, the main source is the book [Probabilistic Robotics](https://mitpress.mit.edu/9780262201629/probabilistic-robotics/). I plan to have algorithms implementations in the `src` folder and the algorithms use cases in the `examples` folder. I plan to have python bindings using [pyo3](https://github.com/PyO3/pyo3)/[maturin](https://github.com/PyO3/maturin). I am also implementing the algorithms in python using [JAX](https://jax.readthedocs.io/en/latest/) in this [repo](https://github.com/jgsimard/jaxrobot).
 
 ## Table of Contents
 
-* [Localization](#localization)
-  * Kalman filter
-  * [Extended kalman filter](#extended-kalman-filter)
-  * Unscented Kalman filter
-  * Information filter
-  * Particle filter
-  * Histogram filter
-* Mapping
-  * Gaussian Grid
-  * Ray Casting Grid
-  * Lidar to Grid
-  * K-means clustering
-  * Gaussian Mixture Model
-  * Rectangle Fitting
-* SLAM
-  * Iterative Closest Point
-  * EKF-SLAM
-  * GraphSlam
-  * SEIF-SLAM
-  * FastSLAM 1.0
-  * FastSLAM 2.0
-* Path Planning
-  * Grid Based Search
-    * Dijkstra
-    * A*
-    * D*
-    * D* lite
-    * Potential Field
-  * Rapidly-Exploring Random Trees (RRT)
-    * RRT*
-    * RRT* with reeds-shepp path
-  * Polynomial
-    * Order 3
-    * Order 5
+- [RustRobotics](#rustrobotics)
+  - [Table of Contents](#table-of-contents)
+  - [Localization](#localization)
+    - [Extended Kalman Filter](#extended-kalman-filter)
+  - [Sources](#sources)
+
+<!-- * Unscented Kalman filter -->
+<!-- * Information filter -->
+<!-- * Particle filter -->
+<!-- * Hisstogram filter -->
+<!-- * Mapping -->
+  <!-- * Gaussian Grid -->
+  <!-- * Ray Casting Grid -->
+  <!-- * Lidar to Grid -->
+  <!-- * K-means clustering -->
+  <!-- * Gaussian Mixture Model -->
+  <!-- * Rectangle Fitting -->
+<!-- * SLAM -->
+  <!-- * Iterative Closest Point -->
+  <!-- * EKF-SLAM -->
+  <!-- * GraphSlam -->
+  <!-- * SEIF-SLAM -->
+  <!-- * FastSLAM 1.0 -->
+  <!-- * FastSLAM 2.0 -->
+<!-- * Path Planning -->
+<!-- * Grid Based Search -->
+<!-- * Dijkstra -->
+<!-- * A-star -->
+<!-- * D-star -->
+<!-- * D-star lite -->
+<!-- * Potential Field -->
+<!-- * Rapidly-Exploring Random Trees (RRT) -->
+<!-- * RRT-star -->
+<!-- * RRT-star with reeds-shepp path -->
+<!-- * Polynomial -->
+<!-- * Order 3 -->
+<!-- * Order 5 -->
 
 ## Localization
 
@@ -48,3 +51,10 @@ This package is a rust implementation of [PythonRobotics](https://github.com/Ats
 ```bash
 cargo run --example ekf
 ```
+
+## Sources
+
+[Probabilistic Robotics](https://mitpress.mit.edu/9780262201629/probabilistic-robotics/)
+[PythonRobotics](https://github.com/AtsushiSakai/PythonRobotics)
+[Underactuated Robotics](https://underactuated.mit.edu/index.html)
+[Probabilistic-Robotics-Algorithms](https://github.com/ChengeYang/Probabilistic-Robotics-Algorithms)
