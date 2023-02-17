@@ -16,6 +16,8 @@ nalgebra = { version = "0.32", features = ["rand"] }
 numpy = "0.18"
 rand = "0.8"
 rand_distr = "0.4"
+
+[dev-dependencies]
 plotters = "0.3"
 
 
