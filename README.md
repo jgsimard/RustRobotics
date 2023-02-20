@@ -8,6 +8,7 @@ This package is a rust implementation of robotics algorithms. So far, the main s
   - [Table of Contents](#table-of-contents)
   - [Localization](#localization)
     - [Extended Kalman Filter](#extended-kalman-filter)
+    - [Unscented Kalman Filter](#unscented-kalman-filter)
   - [Sources](#sources)
 
 <!-- * Unscented Kalman filter -->
@@ -50,6 +51,14 @@ This package is a rust implementation of robotics algorithms. So far, the main s
 
 ```bash
 cargo run --example ekf
+```
+
+### Unscented Kalman Filter
+
+[Algorithm](src/localization/unscented_kalman_filter.rs), [Example](examples/localization/unscented_kalman_filter.rs)
+
+```bash
+cargo run --example ukf
 ```
 
 ## Sources
