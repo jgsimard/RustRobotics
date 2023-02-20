@@ -880,7 +880,7 @@ dependencies = [
 
 [[package]]
 name = "robotics"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "nalgebra",
  "numpy",
