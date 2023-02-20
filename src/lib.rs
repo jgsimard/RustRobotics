@@ -1,3 +1,5 @@
+// #![feature(generic_const_exprs)] // for testing replacing Vec<T> by [T; N] in some places
+
 use pyo3::prelude::*;
 
 // my stuff

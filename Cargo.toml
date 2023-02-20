@@ -31,6 +31,6 @@ path = "examples/localization/extended_kalman_filter.rs"
 
 
 [[example]]
-name = "pf"
-path = "examples/localization/particle_filter.rs"
+name = "ukf"
+path = "examples/localization/unscented_kalman_filter.rs"
 

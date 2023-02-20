@@ -1,8 +1,7 @@
 // // Extended kalman filter (EKF) localization sample
-// // author: Atsushi Sakai (@Atsushi_twi)
 // //         Jean-Gabriel Simard (@jgsimard)
 
-use nalgebra::{Matrix2, Matrix2x4, Matrix4, Vector2, Vector4};
+use nalgebra::{Matrix2, Matrix4, Vector2, Vector4};
 use plotters::prelude::*;
 use rand_distr::{Distribution, Normal};
 use std::error::Error;
@@ -12,14 +11,9 @@ mod plot;
 use plot::{chart, History};
 
 extern crate robotics;
-use robotics::localization::extended_kalman_filter::ExtendedKalmanFilterStatic;
+use robotics::localization::unscented_kalman_filter::UnscentedKalmanFilterStatic;
 use robotics::utils::deg2rad;
 use robotics::utils::state::GaussianStateStatic as GaussianState;
-
-// To use general ExtendedKalmanFilter
-// use nalgebra::Const;
-// use robotics::localization::extended_kalman_filter::ExtendedKalmanFilter;
-// use robotics::utils::GaussianState;
 
 /// State
 /// [x, y, yaw, v]
@@ -39,12 +33,15 @@ struct SimpleProblem {
     // dy/dv = dt*sin(yaw)
     pub gps_noise: Matrix2<f32>,
     pub input_noise: Matrix2<f32>,
-    pub q: Matrix4<f32>,
-    pub r: Matrix2<f32>,
+    q: Matrix4<f32>,
+    r: Matrix2<f32>,
+    gamma: f32,
+    mw: Vec<f32>,
+    cw: Vec<f32>,
 }
 
 // impl ExtendedKalmanFilter<f32, Const<4>, Const<2>, Const<2>> for SimpleProblem {
-impl ExtendedKalmanFilterStatic<f32, 4, 2, 2> for SimpleProblem {
+impl UnscentedKalmanFilterStatic<f32, 4, 2, 2> for SimpleProblem {
     fn motion_model(&self, x: &Vector4<f32>, u: &Vector2<f32>, dt: f32) -> Vector4<f32> {
         let yaw = x[2];
         let v = x[3];
@@ -60,26 +57,6 @@ impl ExtendedKalmanFilterStatic<f32, 4, 2, 2> for SimpleProblem {
         x.xy()
     }
 
-    fn jacobian_motion_model(&self, x: &Vector4<f32>, u: &Vector2<f32>, dt: f32) -> Matrix4<f32> {
-        let yaw = x[2];
-        let v = u[0];
-        #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix4::<f32>::new(
-            1., 0., -dt * v * (yaw).sin(), dt * (yaw).cos(),
-            0., 1., dt * v * (yaw).cos(), dt * (yaw).sin(),
-            0., 0., 1., 0.,
-            0., 0., 0., 0.,
-        )
-    }
-
-    fn jacobian_observation_model(&self) -> Matrix2x4<f32> {
-        #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix2x4::<f32>::new(
-            1., 0., 0., 0.,
-            0., 1., 0., 0.
-        )
-    }
-
     fn q(&self) -> Matrix4<f32> {
         self.q
     }
@@ -87,9 +64,40 @@ impl ExtendedKalmanFilterStatic<f32, 4, 2, 2> for SimpleProblem {
     fn r(&self) -> Matrix2<f32> {
         self.r
     }
+
+    fn gamma(&self) -> f32 {
+        self.gamma
+    }
+    fn mw(&self) -> &Vec<f32> {
+        &self.mw
+    }
+    fn cw(&self) -> &Vec<f32> {
+        &self.cw
+    }
 }
 
 impl SimpleProblem {
+    fn new(
+        input_noise: Matrix2<f32>,
+        gps_noise: Matrix2<f32>,
+        q: Matrix4<f32>,
+        r: Matrix2<f32>,
+        alpha: f32,
+        beta: f32,
+        kappa: f32,
+    ) -> SimpleProblem {
+        let (mw, cw, gamma) = SimpleProblem::sigma_weights(alpha, beta, kappa);
+        SimpleProblem {
+            gps_noise,
+            input_noise,
+            q,
+            r,
+            gamma,
+            mw,
+            cw,
+        }
+    }
+
     fn observation(
         &self,
         x_true: &Vector4<f32>,
@@ -129,12 +137,15 @@ fn run() -> History {
 
     let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
 
-    let simple_problem = SimpleProblem {
-        input_noise: Matrix2::new(1., 0., 0., deg2rad(30.0).powi(2)),
-        gps_noise: Matrix2::new(0.25, 0., 0., 0.25),
+    let simple_problem = SimpleProblem::new(
+        Matrix2::new(1., 0., 0., deg2rad(30.0).powi(2)),
+        Matrix2::new(0.25, 0., 0., 0.25),
         q,
         r,
-    };
+        0.1,
+        2.0,
+        0.0,
+    );
 
     let u = Vector2::<f32>::new(1.0, 0.1);
     let mut ud: Vector2<f32>;
@@ -151,8 +162,7 @@ fn run() -> History {
     while time < sim_time {
         time += dt;
         (x_true, z, x_dr, ud) = simple_problem.observation(&x_true, &x_dr, &u, dt);
-        kalman_state = simple_problem.predict(&kalman_state, &ud, dt);
-        kalman_state = simple_problem.update(&kalman_state, &z);
+        kalman_state = simple_problem.estimate(&kalman_state, &ud, &z, dt);
 
         // record step
         history.z.push((z[0] as f64, z[1] as f64));
@@ -172,20 +182,20 @@ fn main() -> Result<(), Box<dyn Error>> {
     let len = history.z.len();
 
     // Plot image
-    let root = BitMapBackend::new("./img/ekf.png", (1024, 768)).into_drawing_area();
+    let root = BitMapBackend::new("./img/ukf.png", (1024, 768)).into_drawing_area();
     root.fill(&WHITE)?;
-    chart(&root, &history, len - 1, "Extended Kalman Filter")?;
+    chart(&root, &history, len - 1, "Unscented Kalman Filter")?;
     // To avoid the IO failure being ignored silently, we manually call the present function
     root.present().expect(
         "Unable to write result to file, please make sure 'img' dir exists under current dir",
     );
-    println!("Result has been saved to {}", "./img/ekf.png");
+    println!("Result has been saved to {}", "./img/ukf.png");
 
     // Plot GIF
-    let root = BitMapBackend::gif("./img/ekf.gif", (1024, 768), 1)?.into_drawing_area();
+    let root = BitMapBackend::gif("./img/ukf.gif", (1024, 768), 1)?.into_drawing_area();
     for i in (0..len).step_by(5) {
         root.fill(&WHITE)?;
-        chart(&root, &history, i, "Extended Kalman Filter")?;
+        chart(&root, &history, i, "Unscented Kalman Filter")?;
         // To avoid the IO failure being ignored silently, we manually call the present function
         root.present().expect(
             "Unable to write result to file, please make sure 'img' dir exists under current dir",
