@@ -7,7 +7,7 @@ use nalgebra::{
     SMatrix, SVector,
 };
 
-use crate::utils::{GaussianState, GaussianStateDynamic, GaussianStateStatic};
+use crate::utils::state::{GaussianState, GaussianStateDynamic, GaussianStateStatic};
 
 /// S : State Size, Z: Observation Size, U: Input Size
 pub trait ExtendedKalmanFilterStatic<T: RealField, const S: usize, const Z: usize, const U: usize> {

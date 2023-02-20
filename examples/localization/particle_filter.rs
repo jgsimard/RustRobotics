@@ -11,8 +11,8 @@ extern crate robotics;
 use robotics::utils::{deg2rad, GaussianStateStatic};
 
 fn gauss_likelihood(x: f32, sigma: f32) -> f32 {
-    1.0 / f32::sqrt(2.0 * std::f32::consts::PI * sigma.powi(2))
-        * f32::exp(-x.powi(2) / (2.0 * sigma.powi(2)))
+    f32::exp(-x.powi(2) / (2.0 * sigma.powi(2)))
+        / f32::sqrt(2.0 * std::f32::consts::PI * sigma.powi(2))
 }
 
 pub trait ParticleFilterStatic<
