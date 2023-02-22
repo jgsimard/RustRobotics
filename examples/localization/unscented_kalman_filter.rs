@@ -11,7 +11,9 @@ mod plot;
 use plot::{chart, History};
 
 extern crate robotics;
-use robotics::localization::unscented_kalman_filter::UnscentedKalmanFilterStatic;
+use robotics::localization::unscented_kalman_filter::{
+    UnscentedKalmanFilter, UnscentedKalmanfilterModel,
+};
 use robotics::utils::deg2rad;
 use robotics::utils::state::GaussianStateStatic as GaussianState;
 
@@ -33,15 +35,9 @@ struct SimpleProblem {
     // dy/dv = dt*sin(yaw)
     pub gps_noise: Matrix2<f32>,
     pub input_noise: Matrix2<f32>,
-    q: Matrix4<f32>,
-    r: Matrix2<f32>,
-    gamma: f32,
-    mw: Vec<f32>,
-    cw: Vec<f32>,
 }
 
-// impl ExtendedKalmanFilter<f32, Const<4>, Const<2>, Const<2>> for SimpleProblem {
-impl UnscentedKalmanFilterStatic<f32, 4, 2, 2> for SimpleProblem {
+impl UnscentedKalmanfilterModel<f32, 4, 2, 2> for SimpleProblem {
     fn motion_model(&self, x: &Vector4<f32>, u: &Vector2<f32>, dt: f32) -> Vector4<f32> {
         let yaw = x[2];
         let v = x[3];
@@ -56,48 +52,9 @@ impl UnscentedKalmanFilterStatic<f32, 4, 2, 2> for SimpleProblem {
     fn observation_model(&self, x: &Vector4<f32>) -> Vector2<f32> {
         x.xy()
     }
-
-    fn q(&self) -> Matrix4<f32> {
-        self.q
-    }
-
-    fn r(&self) -> Matrix2<f32> {
-        self.r
-    }
-
-    fn gamma(&self) -> f32 {
-        self.gamma
-    }
-    fn mw(&self) -> &Vec<f32> {
-        &self.mw
-    }
-    fn cw(&self) -> &Vec<f32> {
-        &self.cw
-    }
 }
 
 impl SimpleProblem {
-    fn new(
-        input_noise: Matrix2<f32>,
-        gps_noise: Matrix2<f32>,
-        q: Matrix4<f32>,
-        r: Matrix2<f32>,
-        alpha: f32,
-        beta: f32,
-        kappa: f32,
-    ) -> SimpleProblem {
-        let (mw, cw, gamma) = SimpleProblem::sigma_weights(alpha, beta, kappa);
-        SimpleProblem {
-            gps_noise,
-            input_noise,
-            q,
-            r,
-            gamma,
-            mw,
-            cw,
-        }
-    }
-
     fn observation(
         &self,
         x_true: &Vector4<f32>,
@@ -136,16 +93,12 @@ fn run() -> History {
     q = q * q; // predict state covariance
 
     let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
+    let ukf = UnscentedKalmanFilter::<f32, 4, 2, 2>::new(q, r, 0.1, 2.0, 0.0);
 
-    let simple_problem = SimpleProblem::new(
-        Matrix2::new(1., 0., 0., deg2rad(30.0).powi(2)),
-        Matrix2::new(0.25, 0., 0., 0.25),
-        q,
-        r,
-        0.1,
-        2.0,
-        0.0,
-    );
+    let simple_problem = SimpleProblem {
+        gps_noise: Matrix2::new(0.25, 0., 0., 0.25),
+        input_noise: Matrix2::new(1., 0., 0., deg2rad(30.0).powi(2)),
+    };
 
     let u = Vector2::<f32>::new(1.0, 0.1);
     let mut ud: Vector2<f32>;
@@ -162,7 +115,7 @@ fn run() -> History {
     while time < sim_time {
         time += dt;
         (x_true, z, x_dr, ud) = simple_problem.observation(&x_true, &x_dr, &u, dt);
-        kalman_state = simple_problem.estimate(&kalman_state, &ud, &z, dt);
+        kalman_state = ukf.estimate(&simple_problem, &kalman_state, &ud, &z, dt);
 
         // record step
         history.z.push((z[0] as f64, z[1] as f64));

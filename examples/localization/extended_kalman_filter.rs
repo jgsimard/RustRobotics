@@ -12,14 +12,11 @@ mod plot;
 use plot::{chart, History};
 
 extern crate robotics;
-use robotics::localization::extended_kalman_filter::ExtendedKalmanFilterStatic;
+use robotics::localization::extended_kalman_filter::{
+    ExtendedKalmanFilter, ExtendedKalmanFilterModel,
+};
 use robotics::utils::deg2rad;
 use robotics::utils::state::GaussianStateStatic as GaussianState;
-
-// To use general ExtendedKalmanFilter
-// use nalgebra::Const;
-// use robotics::localization::extended_kalman_filter::ExtendedKalmanFilter;
-// use robotics::utils::GaussianState;
 
 /// State
 /// [x, y, yaw, v]
@@ -39,12 +36,9 @@ struct SimpleProblem {
     // dy/dv = dt*sin(yaw)
     pub gps_noise: Matrix2<f32>,
     pub input_noise: Matrix2<f32>,
-    pub q: Matrix4<f32>,
-    pub r: Matrix2<f32>,
 }
 
-// impl ExtendedKalmanFilter<f32, Const<4>, Const<2>, Const<2>> for SimpleProblem {
-impl ExtendedKalmanFilterStatic<f32, 4, 2, 2> for SimpleProblem {
+impl ExtendedKalmanFilterModel<f32, 4, 2, 2> for SimpleProblem {
     fn motion_model(&self, x: &Vector4<f32>, u: &Vector2<f32>, dt: f32) -> Vector4<f32> {
         let yaw = x[2];
         let v = x[3];
@@ -78,14 +72,6 @@ impl ExtendedKalmanFilterStatic<f32, 4, 2, 2> for SimpleProblem {
             1., 0., 0., 0.,
             0., 1., 0., 0.
         )
-    }
-
-    fn q(&self) -> Matrix4<f32> {
-        self.q
-    }
-
-    fn r(&self) -> Matrix2<f32> {
-        self.r
     }
 }
 
@@ -128,12 +114,11 @@ fn run() -> History {
     q = q * q; // predict state covariance
 
     let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
+    let ekf = ExtendedKalmanFilter { Q: q, R: r };
 
     let simple_problem = SimpleProblem {
         input_noise: Matrix2::new(1., 0., 0., deg2rad(30.0).powi(2)),
         gps_noise: Matrix2::new(0.25, 0., 0., 0.25),
-        q,
-        r,
     };
 
     let u = Vector2::<f32>::new(1.0, 0.1);
@@ -151,8 +136,8 @@ fn run() -> History {
     while time < sim_time {
         time += dt;
         (x_true, z, x_dr, ud) = simple_problem.observation(&x_true, &x_dr, &u, dt);
-        kalman_state = simple_problem.predict(&kalman_state, &ud, dt);
-        kalman_state = simple_problem.update(&kalman_state, &z);
+        kalman_state = ekf.predict(&simple_problem, &kalman_state, &ud, dt);
+        kalman_state = ekf.update(&simple_problem, &kalman_state, &z);
 
         // record step
         history.z.push((z[0] as f64, z[1] as f64));

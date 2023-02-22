@@ -2,47 +2,14 @@
 // author: Atsushi Sakai (@Atsushi_twi)
 //         Jean-Gabriel Simard (@jgsimard)
 #![allow(non_snake_case)]
-use nalgebra::{
-    allocator::Allocator, DMatrix, DVector, DefaultAllocator, Dim, OMatrix, OVector, RealField,
-    SMatrix, SVector,
-};
+use nalgebra::{RealField, SMatrix, SVector};
 
-use crate::utils::state::{GaussianState, GaussianStateDynamic, GaussianStateStatic};
+use crate::utils::state::GaussianStateStatic;
 
-/// S : State Size, Z: Observation Size, U: Input Size
-pub trait ExtendedKalmanFilterStatic<T: RealField, const S: usize, const Z: usize, const U: usize> {
-    fn predict(
-        &self,
-        estimate: &GaussianStateStatic<T, S>,
-        u: &SVector<T, U>,
-        dt: T,
-    ) -> GaussianStateStatic<T, S> {
-        let x_pred = self.motion_model(&estimate.x, u, dt.clone());
-        let j_f = self.jacobian_motion_model(&x_pred, u, dt);
-        let p_pred = &j_f * &estimate.P * j_f.transpose() + self.q();
-        GaussianStateStatic {
-            x: x_pred,
-            P: p_pred,
-        }
-    }
-
-    fn update(
-        &self,
-        prediction: &GaussianStateStatic<T, S>,
-        z: &SVector<T, Z>,
-    ) -> GaussianStateStatic<T, S> {
-        let j_h = self.jacobian_observation_model();
-        let z_pred = self.observation_model(&prediction.x);
-        let y = z - z_pred;
-        let s = &j_h * &prediction.P * j_h.transpose() + self.r();
-        let kalman_gain = &prediction.P * j_h.transpose() * s.try_inverse().unwrap();
-        let x_est = &prediction.x + &kalman_gain * y;
-        let p_est = (SMatrix::<T, S, S>::identity() - kalman_gain * j_h) * &prediction.P;
-        GaussianStateStatic { x: x_est, P: p_est }
-    }
-
+pub trait ExtendedKalmanFilterModel<T: RealField, const S: usize, const Z: usize, const U: usize> {
     fn motion_model(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SVector<T, S>;
     fn observation_model(&self, x: &SVector<T, S>) -> SVector<T, Z>;
+
     /// Jacobian of Motion Model
     fn jacobian_motion_model(
         &self,
@@ -53,123 +20,46 @@ pub trait ExtendedKalmanFilterStatic<T: RealField, const S: usize, const Z: usiz
 
     /// Jacobian of Observation Model
     fn jacobian_observation_model(&self) -> SMatrix<T, Z, S>;
-    fn r(&self) -> SMatrix<T, Z, Z>;
-    fn q(&self) -> SMatrix<T, S, S>;
 }
 
-pub trait ExtendedKalmanFilterDynamic<T: RealField> {
-    fn predict(
+pub struct ExtendedKalmanFilter<T: RealField, const S: usize, const Z: usize, const U: usize> {
+    pub Q: SMatrix<T, S, S>,
+    pub R: SMatrix<T, Z, Z>,
+}
+
+/// S : State Size, Z: Observation Size, U: Input Size
+impl<T: RealField, const S: usize, const Z: usize, const U: usize>
+    ExtendedKalmanFilter<T, S, Z, U>
+{
+    pub fn predict(
         &self,
-        estimate: &GaussianStateDynamic<T>,
-        u: &DVector<T>,
+        model: &impl ExtendedKalmanFilterModel<T, S, Z, U>,
+        estimate: &GaussianStateStatic<T, S>,
+        u: &SVector<T, U>,
         dt: T,
-    ) -> GaussianStateDynamic<T> {
-        let x_pred = self.motion_model(&estimate.x, u, dt.clone());
-        let j_f = self.jacobian_motion_model(&x_pred, u, dt);
-        let p_pred = &j_f * &estimate.P * j_f.transpose() + self.q();
-        GaussianStateDynamic {
+    ) -> GaussianStateStatic<T, S> {
+        let x_pred = model.motion_model(&estimate.x, u, dt.clone());
+        let j_f = model.jacobian_motion_model(&x_pred, u, dt);
+        let p_pred = &j_f * &estimate.P * j_f.transpose() + &self.Q;
+        GaussianStateStatic {
             x: x_pred,
             P: p_pred,
         }
     }
 
-    fn update(
+    pub fn update(
         &self,
-        prediction: &GaussianStateDynamic<T>,
-        z: &DVector<T>,
-    ) -> GaussianStateDynamic<T> {
-        let j_h = self.jacobian_observation_model();
-        let z_pred = self.observation_model(&prediction.x);
+        model: &impl ExtendedKalmanFilterModel<T, S, Z, U>,
+        prediction: &GaussianStateStatic<T, S>,
+        z: &SVector<T, Z>,
+    ) -> GaussianStateStatic<T, S> {
+        let j_h = model.jacobian_observation_model();
+        let z_pred = model.observation_model(&prediction.x);
         let y = z - z_pred;
-        let s = &j_h * &prediction.P * j_h.transpose() + self.r();
+        let s = &j_h * &prediction.P * j_h.transpose() + &self.R;
         let kalman_gain = &prediction.P * j_h.transpose() * s.try_inverse().unwrap();
         let x_est = &prediction.x + &kalman_gain * y;
-        let shape = prediction.P.shape();
-        let p_est = (DMatrix::<T>::identity(shape.0, shape.1) - kalman_gain * j_h) * &prediction.P;
-        GaussianStateDynamic { x: x_est, P: p_est }
+        let p_est = (SMatrix::<T, S, S>::identity() - kalman_gain * j_h) * &prediction.P;
+        GaussianStateStatic { x: x_est, P: p_est }
     }
-
-    fn motion_model(&self, x: &DVector<T>, u: &DVector<T>, dt: T) -> DVector<T>;
-    fn observation_model(&self, x: &DVector<T>) -> DVector<T>;
-
-    /// Jacobian of Motion Model
-    fn jacobian_motion_model(&self, x: &DVector<T>, u: &DVector<T>, dt: T) -> DMatrix<T>;
-
-    /// Jacobian of Observation Model
-    fn jacobian_observation_model(&self) -> DMatrix<T>;
-
-    fn r(&self) -> DMatrix<T>;
-    fn q(&self) -> DMatrix<T>;
-}
-
-pub trait ExtendedKalmanFilter<T: RealField, S: Dim, Z: Dim, U: Dim> {
-    fn predict(
-        &self,
-        estimate: &GaussianState<T, S>,
-        u: &OVector<T, U>,
-        dt: T,
-    ) -> GaussianState<T, S>
-    where
-        DefaultAllocator:
-            Allocator<T, U> + Allocator<T, S> + Allocator<T, S, S> + Allocator<T, S, U>,
-    {
-        let x_pred = self.motion_model(&estimate.x, u, dt.clone());
-        let j_f = self.jacobian_motion_model(&x_pred, u, dt);
-        let p_pred = &j_f * &estimate.P * j_f.transpose() + self.q();
-        GaussianState {
-            x: x_pred,
-            P: p_pred,
-        }
-    }
-
-    fn update(&self, prediction: &GaussianState<T, S>, z: &OVector<T, Z>) -> GaussianState<T, S>
-    where
-        DefaultAllocator: Allocator<T, Z>
-            + Allocator<T, S>
-            + Allocator<T, S, S>
-            + Allocator<T, Z, Z>
-            + Allocator<T, Z, S>
-            + Allocator<T, S, Z>,
-    {
-        let j_h = self.jacobian_observation_model();
-        let z_pred = self.observation_model(&prediction.x);
-        let y = z - z_pred;
-        let s = &j_h * &prediction.P * j_h.transpose() + self.r();
-        let kalman_gain = &prediction.P * j_h.transpose() * s.try_inverse().unwrap();
-        let x_est = &prediction.x + &kalman_gain * y;
-        let ps = &prediction.P.shape_generic();
-        let p_est = (OMatrix::identity_generic(ps.0, ps.1) - kalman_gain * j_h) * &prediction.P;
-        GaussianState { x: x_est, P: p_est }
-    }
-
-    fn motion_model(&self, x: &OVector<T, S>, u: &OVector<T, U>, dt: T) -> OVector<T, S>
-    where
-        DefaultAllocator: Allocator<T, U> + Allocator<T, S>;
-
-    fn observation_model(&self, x: &OVector<T, S>) -> OVector<T, Z>
-    where
-        DefaultAllocator: Allocator<T, S> + Allocator<T, Z>;
-
-    fn r(&self) -> OMatrix<T, Z, Z>
-    where
-        DefaultAllocator: Allocator<T, Z, Z>;
-
-    fn q(&self) -> OMatrix<T, S, S>
-    where
-        DefaultAllocator: Allocator<T, S, S>;
-
-    /// Jacobian of Motion Model
-    fn jacobian_motion_model(
-        &self,
-        x: &OVector<T, S>,
-        u: &OVector<T, U>,
-        dt: T,
-    ) -> OMatrix<T, S, S>
-    where
-        DefaultAllocator: Allocator<T, S> + Allocator<T, U> + Allocator<T, S, S>;
-
-    /// Jacobian of Observation Model
-    fn jacobian_observation_model(&self) -> OMatrix<T, Z, S>
-    where
-        DefaultAllocator: Allocator<T, Z, S>;
 }
