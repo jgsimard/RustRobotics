@@ -53,10 +53,43 @@ pub fn chart(
     i: usize,
     name: &str,
 ) -> Result<(), Box<dyn Error>> {
+    let min_x = history
+        .z
+        .iter()
+        .take(i)
+        .map(|(x, _y)| *x)
+        .reduce(f64::min)
+        .unwrap_or(-1.0)
+        - 1.0;
+    let min_y = history
+        .z
+        .iter()
+        .take(i)
+        .map(|(_x, y)| *y)
+        .reduce(f64::min)
+        .unwrap_or(-1.0)
+        - 1.0;
+    let max_x = history
+        .z
+        .iter()
+        .take(i)
+        .map(|(x, _y)| *x)
+        .reduce(f64::max)
+        .unwrap_or(1.0)
+        + 1.0;
+    let max_y = history
+        .z
+        .iter()
+        .take(i)
+        .map(|(_x, y)| *y)
+        .reduce(f64::max)
+        .unwrap_or(1.0)
+        + 1.0;
+    // find chart dimensions
     let mut chart = ChartBuilder::on(&root)
         .margin(10)
         .caption(name, ("sans-serif", 40))
-        .build_cartesian_2d(-15.0..15.0, -5.0..25.0)?;
+        .build_cartesian_2d(min_x..max_x, min_y..max_y)?;
 
     chart.configure_mesh().draw()?;
 
@@ -106,12 +139,14 @@ pub fn chart(
     let p_xy = state.P.fixed_view::<2, 2>(0, 0).clone_owned();
     let xy = state.x.fixed_view::<2, 1>(0, 0).clone_owned();
 
-    chart.draw_series(
-        ellipse_series(xy, p_xy)
-            .unwrap()
-            .iter()
-            .map(|(x, y)| Circle::new((*x, *y), 3, BLACK.filled())),
-    )?;
+    chart.draw_series(std::iter::once(Polygon::new(
+        ellipse_series(xy, p_xy).unwrap(),
+        &GREEN.mix(0.4),
+    )))?;
+    chart.draw_series(std::iter::once(PathElement::new(
+        ellipse_series(xy, p_xy).unwrap(),
+        &GREEN,
+    )))?;
 
     chart
         .configure_series_labels()
