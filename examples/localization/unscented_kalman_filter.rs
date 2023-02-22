@@ -154,7 +154,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             "Unable to write result to file, please make sure 'img' dir exists under current dir",
         );
     }
-    println!("Result has been saved to {}", "./img/ekf.gif");
+    println!("Result has been saved to {}", "./img/ukf.gif");
 
     Ok(())
 }
