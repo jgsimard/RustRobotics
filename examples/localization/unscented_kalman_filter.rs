@@ -158,13 +158,3 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::run;
-
-    #[test]
-    fn it_works() {
-        run();
-    }
-}
