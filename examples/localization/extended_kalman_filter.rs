@@ -114,7 +114,7 @@ fn run() -> History {
     q = q * q; // predict state covariance
 
     let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
-    let ekf = ExtendedKalmanFilter { Q: q, R: r };
+    let ekf = ExtendedKalmanFilter::new(q, r);
 
     let simple_problem = SimpleProblem {
         input_noise: Matrix2::new(1., 0., 0., deg2rad(30.0).powi(2)),

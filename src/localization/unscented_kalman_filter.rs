@@ -9,13 +9,14 @@ use crate::utils::state::GaussianStateStatic;
 
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct UnscentedKalmanFilter<T: RealField, const S: usize, const Z: usize, const U: usize> {
-    pub Q: SMatrix<T, S, S>,
-    pub R: SMatrix<T, Z, Z>,
-    pub gamma: T,
-    pub mw: Vec<T>,
-    pub cw: Vec<T>,
+    Q: SMatrix<T, S, S>,
+    R: SMatrix<T, Z, Z>,
+    gamma: T,
+    mw: Vec<T>,
+    cw: Vec<T>,
 }
 
+/// S : State Size, Z: Observation Size, U: Input Size
 pub trait UnscentedKalmanfilterModel<T: RealField, const S: usize, const Z: usize, const U: usize> {
     fn motion_model(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SVector<T, S>;
     fn observation_model(&self, x: &SVector<T, S>) -> SVector<T, Z>;

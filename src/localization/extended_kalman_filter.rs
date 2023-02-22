@@ -6,6 +6,7 @@ use nalgebra::{RealField, SMatrix, SVector};
 
 use crate::utils::state::GaussianStateStatic;
 
+/// S : State Size, Z: Observation Size, U: Input Size
 pub trait ExtendedKalmanFilterModel<T: RealField, const S: usize, const Z: usize, const U: usize> {
     fn motion_model(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SVector<T, S>;
     fn observation_model(&self, x: &SVector<T, S>) -> SVector<T, Z>;
@@ -22,15 +23,19 @@ pub trait ExtendedKalmanFilterModel<T: RealField, const S: usize, const Z: usize
     fn jacobian_observation_model(&self) -> SMatrix<T, Z, S>;
 }
 
+/// S : State Size, Z: Observation Size, U: Input Size
 pub struct ExtendedKalmanFilter<T: RealField, const S: usize, const Z: usize, const U: usize> {
-    pub Q: SMatrix<T, S, S>,
-    pub R: SMatrix<T, Z, Z>,
+    Q: SMatrix<T, S, S>,
+    R: SMatrix<T, Z, Z>,
 }
 
-/// S : State Size, Z: Observation Size, U: Input Size
 impl<T: RealField, const S: usize, const Z: usize, const U: usize>
     ExtendedKalmanFilter<T, S, Z, U>
 {
+    pub fn new(Q: SMatrix<T, S, S>, R: SMatrix<T, Z, Z>) -> ExtendedKalmanFilter<T, S, Z, U> {
+        ExtendedKalmanFilter { Q, R }
+    }
+
     pub fn predict(
         &self,
         model: &impl ExtendedKalmanFilterModel<T, S, Z, U>,
