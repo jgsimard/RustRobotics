@@ -2,17 +2,13 @@
 // author: Jean-Gabriel Simard (@jgsimard)
 
 #![allow(non_snake_case)]
-use nalgebra::{RealField, SMatrix, SVector, Scalar};
+
+use nalgebra::{RealField, SMatrix, SVector};
 
 use crate::utils::state::GaussianStateStatic;
 
 /// S : State Size, Z: Observation Size, U: Input Size
-pub struct UnscentedKalmanFilter<
-    T: RealField + Scalar + Copy,
-    const S: usize,
-    const Z: usize,
-    const U: usize,
-> {
+pub struct UnscentedKalmanFilter<T: RealField, const S: usize, const Z: usize, const U: usize> {
     pub Q: SMatrix<T, S, S>,
     pub R: SMatrix<T, Z, Z>,
     pub gamma: T,
@@ -20,18 +16,12 @@ pub struct UnscentedKalmanFilter<
     pub cw: Vec<T>,
 }
 
-pub trait UnscentedKalmanfilterModel<
-    T: RealField + Scalar + Copy,
-    const S: usize,
-    const Z: usize,
-    const U: usize,
->
-{
+pub trait UnscentedKalmanfilterModel<T: RealField, const S: usize, const Z: usize, const U: usize> {
     fn motion_model(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SVector<T, S>;
     fn observation_model(&self, x: &SVector<T, S>) -> SVector<T, Z>;
 }
 
-impl<T: RealField + Scalar + Copy, const S: usize, const Z: usize, const U: usize>
+impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
     UnscentedKalmanFilter<T, S, Z, U>
 {
     pub fn new(
@@ -71,12 +61,11 @@ impl<T: RealField + Scalar + Copy, const S: usize, const Z: usize, const U: usiz
     fn generate_sigma_points(&self, state: &GaussianStateStatic<T, S>) -> Vec<SVector<T, S>> {
         // use cholesky to compute the matrix square root  // cholesky(A) = L * L^T
         let sigma = state.P.cholesky().expect("unable to sqrt").l() * self.gamma;
-        let mut sigma_points = Vec::new();
-        sigma_points.push(state.x);
+        let mut sigma_points = vec![state.x; 2 * S + 1];
         for i in 0..S {
             let sigma_column = sigma.column(i);
-            sigma_points.push(state.x + sigma_column);
-            sigma_points.push(state.x - sigma_column);
+            sigma_points[i + 1] += sigma_column;
+            sigma_points[i + 1 + S] -= sigma_column;
         }
         sigma_points
     }
@@ -150,22 +139,18 @@ impl<T: RealField + Scalar + Copy, const S: usize, const Z: usize, const U: usiz
 }
 
 /// S : State Size, Z: Observation Size, U: Input Size
-pub struct UnscentedKalmanFilterArray<
-    T: RealField + Scalar + Copy,
-    const S: usize,
-    const Z: usize,
-    const U: usize,
-> where
+pub struct UnscentedKalmanFilterArray<T: RealField, const S: usize, const Z: usize, const U: usize>
+where
     [(); 2 * S + 1]: Sized,
 {
     pub Q: SMatrix<T, S, S>,
     pub R: SMatrix<T, Z, Z>,
     pub gamma: T,
-    pub mw: SVector<T, { 2 * S + 1 }>,
-    pub cw: SVector<T, { 2 * S + 1 }>,
+    pub mw: [T; 2 * S + 1],
+    pub cw: [T; 2 * S + 1],
 }
 
-impl<T: RealField + Scalar + Copy, const S: usize, const Z: usize, const U: usize>
+impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
     UnscentedKalmanFilterArray<T, S, Z, U>
 where
     [(); 2 * S + 1]: Sized,
@@ -187,17 +172,13 @@ where
             cw,
         }
     }
-    fn sigma_weights(
-        alpha: T,
-        beta: T,
-        kappa: T,
-    ) -> (SVector<T, { 2 * S + 1 }>, SVector<T, { 2 * S + 1 }>, T) {
+    fn sigma_weights(alpha: T, beta: T, kappa: T) -> ([T; 2 * S + 1], [T; 2 * S + 1], T) {
         let n = T::from_usize(S).unwrap();
         let lambda = alpha.powi(2) * (n + kappa) - n;
 
         let v = T::one() / ((T::one() + T::one()) * (n + lambda));
-        let mut mw = SVector::<T, { 2 * S + 1 }>::from_element(v);
-        let mut cw = SVector::<T, { 2 * S + 1 }>::from_element(v);
+        let mut mw = [v; 2 * S + 1];
+        let mut cw = [v; 2 * S + 1];
 
         // special cases
         let v = lambda / (n + lambda);
@@ -208,15 +189,18 @@ where
         (mw, cw, gamma)
     }
 
-    fn generate_sigma_points(&self, state: &GaussianStateStatic<T, S>) -> Vec<SVector<T, S>> {
+    #[allow(clippy::uninit_assumed_init)]
+    fn generate_sigma_points(
+        &self,
+        state: &GaussianStateStatic<T, S>,
+    ) -> [SVector<T, S>; 2 * S + 1] {
         // use cholesky to compute the matrix square root
         let sigma = state.P.cholesky().expect("unable to sqrt").l() * self.gamma;
-        let mut sigma_points = Vec::new();
-        sigma_points.push(state.x);
+        let mut sigma_points: [SVector<T, S>; 2 * S + 1] = [state.x; 2 * S + 1];
         for i in 0..S {
             let sigma_column = sigma.column(i);
-            sigma_points.push(state.x + sigma_column);
-            sigma_points.push(state.x - sigma_column);
+            sigma_points[i + 1] += sigma_column;
+            sigma_points[i + 1 + S] -= sigma_column;
         }
         sigma_points
     }
@@ -286,5 +270,78 @@ where
         let x_est = mean_xpred + kalman_gain * y;
         let p_est = cov_xpred - kalman_gain * cov_z * kalman_gain.transpose();
         GaussianStateStatic { x: x_est, P: p_est }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    extern crate test;
+    use crate::localization::unscented_kalman_filter::{
+        UnscentedKalmanFilter, UnscentedKalmanFilterArray, UnscentedKalmanfilterModel,
+    };
+    use crate::utils::deg2rad;
+    use crate::utils::state::GaussianStateStatic as GaussianState;
+    use nalgebra::{Matrix4, Vector2, Vector4};
+    use test::{black_box, Bencher};
+
+    struct SimpleProblem {}
+
+    impl UnscentedKalmanfilterModel<f32, 4, 2, 2> for SimpleProblem {
+        fn motion_model(&self, x: &Vector4<f32>, u: &Vector2<f32>, dt: f32) -> Vector4<f32> {
+            let yaw = x[2];
+            let v = x[3];
+            Vector4::new(
+                x.x + yaw.cos() * v * dt,
+                x.y + yaw.sin() * v * dt,
+                yaw + u.y * dt,
+                u.x,
+            )
+        }
+
+        fn observation_model(&self, x: &Vector4<f32>) -> Vector2<f32> {
+            x.xy()
+        }
+    }
+
+    #[bench]
+    fn ukf(b: &mut Bencher) {
+        let dt = 0.1;
+
+        // setup ukf
+        let q = Matrix4::<f32>::from_diagonal(&Vector4::new(0.1, 0.1, deg2rad(1.0), 1.0));
+        let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
+        let ukf = UnscentedKalmanFilter::<f32, 4, 2, 2>::new(q, r, 0.1, 2.0, 0.0);
+
+        let simple_problem = SimpleProblem {};
+
+        let u: Vector2<f32> = Default::default();
+        let kalman_state = GaussianState {
+            x: Vector4::<f32>::new(0., 0., 0., 0.),
+            P: Matrix4::<f32>::identity(),
+        };
+        let z: Vector2<f32> = Default::default();
+
+        b.iter(|| black_box(ukf.estimate(&simple_problem, &kalman_state, &u, &z, dt)));
+    }
+
+    #[bench]
+    fn ukf_array(b: &mut Bencher) {
+        let dt = 0.1;
+
+        // setup ukf
+        let q = Matrix4::<f32>::from_diagonal(&Vector4::new(0.1, 0.1, deg2rad(1.0), 1.0));
+        let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
+        let ukf = UnscentedKalmanFilterArray::<f32, 4, 2, 2>::new(q, r, 0.1, 2.0, 0.0);
+
+        let simple_problem = SimpleProblem {};
+
+        let u: Vector2<f32> = Default::default();
+        let kalman_state = GaussianState {
+            x: Vector4::<f32>::new(0., 0., 0., 0.),
+            P: Matrix4::<f32>::identity(),
+        };
+        let z: Vector2<f32> = Default::default();
+
+        b.iter(|| black_box(ukf.estimate(&simple_problem, &kalman_state, &u, &z, dt)));
     }
 }
