@@ -43,8 +43,8 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
         u: &SVector<T, U>,
         dt: T,
     ) -> GaussianStateStatic<T, S> {
-        let x_pred = model.motion_model(&estimate.x, u, dt.clone());
-        let j_f = model.jacobian_motion_model(&x_pred, u, dt);
+        let j_f = model.jacobian_motion_model(&estimate.x, u, dt.clone());
+        let x_pred = model.motion_model(&estimate.x, u, dt);
         let p_pred = &j_f * &estimate.P * j_f.transpose() + &self.Q;
         GaussianStateStatic {
             x: x_pred,
