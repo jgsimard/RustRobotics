@@ -1,10 +1,8 @@
-// // Extended kalman filter (EKF) localization sample
-// // author: Atsushi Sakai (@Atsushi_twi)
-// //         Jean-Gabriel Simard (@jgsimard)
-
-use nalgebra::{Matrix2, Matrix2x4, Matrix4, Vector2, Vector4};
+use nalgebra::{Matrix2, Matrix4, Vector2, Vector4};
 use plotters::prelude::*;
 use rand_distr::{Distribution, Normal};
+use robotics::models::measurement::{MeasurementModel, SimpleProblemMeasurementModel};
+use robotics::models::motion::{MotionModel, SimpleProblemMotionModel};
 use std::error::Error;
 
 #[path = "../plot.rs"]
@@ -12,9 +10,7 @@ mod plot;
 use plot::{chart, History};
 
 extern crate robotics;
-use robotics::localization::extended_kalman_filter::{
-    ExtendedKalmanFilter, ExtendedKalmanFilterModel,
-};
+use robotics::localization::extended_kalman_filter::ExtendedKalmanFilter;
 use robotics::utils::deg2rad;
 use robotics::utils::state::GaussianStateStatic as GaussianState;
 
@@ -24,55 +20,10 @@ use robotics::utils::state::GaussianStateStatic as GaussianState;
 /// Observation
 /// [x,y]
 struct SimpleProblem {
-    // motion model
-    // x_{t+1} = x_t+v*dt*cos(yaw)
-    // y_{t+1} = y_t+v*dt*sin(yaw)
-    // yaw_{t+1} = yaw_t+omega*dt
-    // v_{t+1} = v{t}
-    // so
-    // dx/dyaw = -v*dt*sin(yaw)
-    // dx/dv = dt*cos(yaw)
-    // dy/dyaw = v*dt*cos(yaw)
-    // dy/dv = dt*sin(yaw)
     pub gps_noise: Matrix2<f32>,
     pub input_noise: Matrix2<f32>,
-}
-
-impl ExtendedKalmanFilterModel<f32, 4, 2, 2> for SimpleProblem {
-    fn motion_model(&self, x: &Vector4<f32>, u: &Vector2<f32>, dt: f32) -> Vector4<f32> {
-        let yaw = x[2];
-        let v = x[3];
-        Vector4::new(
-            x.x + yaw.cos() * v * dt,
-            x.y + yaw.sin() * v * dt,
-            yaw + u.y * dt,
-            u.x,
-        )
-    }
-
-    fn observation_model(&self, x: &Vector4<f32>) -> Vector2<f32> {
-        x.xy()
-    }
-
-    fn jacobian_motion_model(&self, x: &Vector4<f32>, u: &Vector2<f32>, dt: f32) -> Matrix4<f32> {
-        let yaw = x[2];
-        let v = u[0];
-        #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix4::<f32>::new(
-            1., 0., -dt * v * (yaw).sin(), dt * (yaw).cos(),
-            0., 1., dt * v * (yaw).cos(), dt * (yaw).sin(),
-            0., 0., 1., 0.,
-            0., 0., 0., 0.,
-        )
-    }
-
-    fn jacobian_observation_model(&self) -> Matrix2x4<f32> {
-        #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix2x4::<f32>::new(
-            1., 0., 0., 0.,
-            0., 1., 0., 0.
-        )
-    }
+    pub motion_model: SimpleProblemMotionModel,
+    pub observation_model: SimpleProblemMeasurementModel,
 }
 
 impl SimpleProblem {
@@ -86,19 +37,19 @@ impl SimpleProblem {
         let mut rng = rand::thread_rng();
         let normal = Normal::new(0., 1.).unwrap();
 
-        let x_true_next = self.motion_model(x_true, u, dt);
+        let x_true_next = self.motion_model.prediction(x_true, u, dt);
 
         // add noise to gps x-y
         let observation_noise =
             self.gps_noise * Vector2::new(normal.sample(&mut rng), normal.sample(&mut rng));
-        let observation = self.observation_model(&x_true_next) + observation_noise;
+        let observation = self.observation_model.prediction(&x_true_next, None) + observation_noise;
 
         // add noise to input
         let u_noise =
             self.input_noise * Vector2::new(normal.sample(&mut rng), normal.sample(&mut rng));
         let ud = u + u_noise;
 
-        let x_deterministic_next = self.motion_model(x_deterministic, &ud, dt);
+        let x_deterministic_next = self.motion_model.prediction(x_deterministic, &ud, dt);
 
         (x_true_next, observation, x_deterministic_next, ud)
     }
@@ -114,11 +65,18 @@ fn run() -> History {
     q = q * q; // predict state covariance
 
     let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
-    let ekf = ExtendedKalmanFilter::new(q, r);
+    let ekf = ExtendedKalmanFilter::new(
+        q,
+        r,
+        Box::new(SimpleProblemMeasurementModel {}),
+        Box::new(SimpleProblemMotionModel {}),
+    );
 
     let simple_problem = SimpleProblem {
         input_noise: Matrix2::new(1., 0., 0., deg2rad(30.0).powi(2)),
         gps_noise: Matrix2::new(0.25, 0., 0., 0.25),
+        observation_model: SimpleProblemMeasurementModel {},
+        motion_model: SimpleProblemMotionModel {},
     };
 
     let u = Vector2::<f32>::new(1.0, 0.1);
@@ -136,8 +94,7 @@ fn run() -> History {
     while time < sim_time {
         time += dt;
         (x_true, z, x_dr, ud) = simple_problem.observation(&x_true, &x_dr, &u, dt);
-        kalman_state = ekf.predict(&simple_problem, &kalman_state, &ud, dt);
-        kalman_state = ekf.update(&simple_problem, &kalman_state, &z);
+        kalman_state = ekf.estimate(&kalman_state, &ud, &z, dt);
 
         // record step
         history.z.push((z[0] as f64, z[1] as f64));

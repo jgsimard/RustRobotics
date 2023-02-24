@@ -11,9 +11,9 @@ mod plot;
 use plot::{chart, History};
 
 extern crate robotics;
-use robotics::localization::unscented_kalman_filter::{
-    UnscentedKalmanFilter, UnscentedKalmanfilterModel,
-};
+use robotics::localization::unscented_kalman_filter::UnscentedKalmanFilter;
+use robotics::models::measurement::{MeasurementModel, SimpleProblemMeasurementModel};
+use robotics::models::motion::{MotionModel, SimpleProblemMotionModel};
 use robotics::utils::deg2rad;
 use robotics::utils::state::GaussianStateStatic as GaussianState;
 
@@ -35,23 +35,8 @@ struct SimpleProblem {
     // dy/dv = dt*sin(yaw)
     pub gps_noise: Matrix2<f32>,
     pub input_noise: Matrix2<f32>,
-}
-
-impl UnscentedKalmanfilterModel<f32, 4, 2, 2> for SimpleProblem {
-    fn motion_model(&self, x: &Vector4<f32>, u: &Vector2<f32>, dt: f32) -> Vector4<f32> {
-        let yaw = x[2];
-        let v = x[3];
-        Vector4::new(
-            x.x + yaw.cos() * v * dt,
-            x.y + yaw.sin() * v * dt,
-            yaw + u.y * dt,
-            u.x,
-        )
-    }
-
-    fn observation_model(&self, x: &Vector4<f32>) -> Vector2<f32> {
-        x.xy()
-    }
+    pub motion_model: SimpleProblemMotionModel,
+    pub observation_model: SimpleProblemMeasurementModel,
 }
 
 impl SimpleProblem {
@@ -65,19 +50,19 @@ impl SimpleProblem {
         let mut rng = rand::thread_rng();
         let normal = Normal::new(0., 1.).unwrap();
 
-        let x_true_next = self.motion_model(x_true, u, dt);
+        let x_true_next = self.motion_model.prediction(x_true, u, dt);
 
         // add noise to gps x-y
         let observation_noise =
             self.gps_noise * Vector2::new(normal.sample(&mut rng), normal.sample(&mut rng));
-        let observation = self.observation_model(&x_true_next) + observation_noise;
+        let observation = self.observation_model.prediction(&x_true_next, None) + observation_noise;
 
         // add noise to input
         let u_noise =
             self.input_noise * Vector2::new(normal.sample(&mut rng), normal.sample(&mut rng));
         let ud = u + u_noise;
 
-        let x_deterministic_next = self.motion_model(x_deterministic, &ud, dt);
+        let x_deterministic_next = self.motion_model.prediction(x_deterministic, &ud, dt);
 
         (x_true_next, observation, x_deterministic_next, ud)
     }
@@ -93,11 +78,21 @@ fn run() -> History {
     q = q * q; // predict state covariance
 
     let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
-    let ukf = UnscentedKalmanFilter::<f32, 4, 2, 2>::new(q, r, 0.1, 2.0, 0.0);
+    let ukf = UnscentedKalmanFilter::<f32, 4, 2, 2>::new(
+        q,
+        r,
+        Box::new(SimpleProblemMeasurementModel {}),
+        Box::new(SimpleProblemMotionModel {}),
+        0.1,
+        2.0,
+        0.0,
+    );
 
     let simple_problem = SimpleProblem {
         gps_noise: Matrix2::new(0.25, 0., 0., 0.25),
         input_noise: Matrix2::new(1., 0., 0., deg2rad(30.0).powi(2)),
+        observation_model: SimpleProblemMeasurementModel {},
+        motion_model: SimpleProblemMotionModel {},
     };
 
     let u = Vector2::<f32>::new(1.0, 0.1);
@@ -115,7 +110,7 @@ fn run() -> History {
     while time < sim_time {
         time += dt;
         (x_true, z, x_dr, ud) = simple_problem.observation(&x_true, &x_dr, &u, dt);
-        kalman_state = ukf.estimate(&simple_problem, &kalman_state, &ud, &z, dt);
+        kalman_state = ukf.estimate(&kalman_state, &ud, &z, dt);
 
         // record step
         history.z.push((z[0] as f64, z[1] as f64));

@@ -1,10 +1,9 @@
-// Unscented kalman filter (UKF) localization sample
-// author: Jean-Gabriel Simard (@jgsimard)
-
 #![allow(non_snake_case)]
 
 use nalgebra::{RealField, SMatrix, SVector};
 
+use crate::models::measurement::MeasurementModel;
+use crate::models::motion::MotionModel;
 use crate::utils::state::GaussianStateStatic;
 
 /// S : State Size, Z: Observation Size, U: Input Size
@@ -12,14 +11,10 @@ pub struct UnscentedKalmanFilter<T: RealField, const S: usize, const Z: usize, c
     Q: SMatrix<T, S, S>,
     R: SMatrix<T, Z, Z>,
     gamma: T,
+    observation_model: Box<dyn MeasurementModel<T, S, Z>>,
+    motion_model: Box<dyn MotionModel<T, S, Z, U>>,
     mw: Vec<T>,
     cw: Vec<T>,
-}
-
-/// S : State Size, Z: Observation Size, U: Input Size
-pub trait UnscentedKalmanfilterModel<T: RealField, const S: usize, const Z: usize, const U: usize> {
-    fn motion_model(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SVector<T, S>;
-    fn observation_model(&self, x: &SVector<T, S>) -> SVector<T, Z>;
 }
 
 impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
@@ -28,6 +23,8 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
     pub fn new(
         Q: SMatrix<T, S, S>,
         R: SMatrix<T, Z, Z>,
+        observation_model: Box<dyn MeasurementModel<T, S, Z>>,
+        motion_model: Box<dyn MotionModel<T, S, Z, U>>,
         alpha: T,
         beta: T,
         kappa: T,
@@ -37,6 +34,8 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
         UnscentedKalmanFilter {
             Q,
             R,
+            observation_model,
+            motion_model,
             gamma,
             mw,
             cw,
@@ -73,7 +72,6 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
 
     pub fn estimate(
         &self,
-        model: &impl UnscentedKalmanfilterModel<T, S, Z, U>,
         state: &GaussianStateStatic<T, S>,
         u: &SVector<T, U>,
         z: &SVector<T, Z>,
@@ -83,7 +81,7 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
         let sigma_points = self.generate_sigma_points(state);
         let sp_xpred: Vec<SVector<T, S>> = sigma_points
             .iter()
-            .map(|x| model.motion_model(x, u, dt))
+            .map(|x| self.motion_model.prediction(x, u, dt))
             .collect();
 
         let mean_xpred: SVector<T, S> = sp_xpred
@@ -109,7 +107,7 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
         let sp_xpred = self.generate_sigma_points(&prediction);
         let sp_z: Vec<SVector<T, Z>> = sp_xpred
             .iter()
-            .map(|x| model.observation_model(x))
+            .map(|x| self.observation_model.prediction(x, None))
             .collect();
 
         let mean_z: SVector<T, Z> = sp_z.iter().zip(self.mw.iter()).map(|(x, w)| x * *w).sum();
@@ -146,6 +144,8 @@ where
 {
     pub Q: SMatrix<T, S, S>,
     pub R: SMatrix<T, Z, Z>,
+    observation_model: Box<dyn MeasurementModel<T, S, Z>>,
+    motion_model: Box<dyn MotionModel<T, S, Z, U>>,
     pub gamma: T,
     pub mw: [T; 2 * S + 1],
     pub cw: [T; 2 * S + 1],
@@ -159,6 +159,8 @@ where
     pub fn new(
         Q: SMatrix<T, S, S>,
         R: SMatrix<T, Z, Z>,
+        observation_model: Box<dyn MeasurementModel<T, S, Z>>,
+        motion_model: Box<dyn MotionModel<T, S, Z, U>>,
         alpha: T,
         beta: T,
         kappa: T,
@@ -168,6 +170,8 @@ where
         UnscentedKalmanFilterArray {
             Q,
             R,
+            observation_model,
+            motion_model,
             gamma,
             mw,
             cw,
@@ -208,7 +212,6 @@ where
 
     pub fn estimate(
         &self,
-        model: &impl UnscentedKalmanfilterModel<T, S, Z, U>,
         state: &GaussianStateStatic<T, S>,
         u: &SVector<T, U>,
         z: &SVector<T, Z>,
@@ -218,7 +221,7 @@ where
         let sigma_points = self.generate_sigma_points(state);
         let sp_xpred: Vec<SVector<T, S>> = sigma_points
             .iter()
-            .map(|x| model.motion_model(x, u, dt))
+            .map(|x| self.motion_model.prediction(x, u, dt))
             .collect();
 
         let mean_xpred: SVector<T, S> = sp_xpred
@@ -244,7 +247,7 @@ where
         let sp_xpred = self.generate_sigma_points(&prediction);
         let sp_z: Vec<SVector<T, Z>> = sp_xpred
             .iter()
-            .map(|x| model.observation_model(x))
+            .map(|x| self.observation_model.prediction(x, None))
             .collect();
 
         let mean_z: SVector<T, Z> = sp_z.iter().zip(self.mw.iter()).map(|(x, w)| x * *w).sum();
@@ -278,31 +281,14 @@ where
 mod tests {
     extern crate test;
     use crate::localization::unscented_kalman_filter::{
-        UnscentedKalmanFilter, UnscentedKalmanFilterArray, UnscentedKalmanfilterModel,
+        UnscentedKalmanFilter, UnscentedKalmanFilterArray,
     };
+    use crate::models::measurement::SimpleProblemMeasurementModel;
+    use crate::models::motion::SimpleProblemMotionModel;
     use crate::utils::deg2rad;
     use crate::utils::state::GaussianStateStatic as GaussianState;
     use nalgebra::{Matrix4, Vector2, Vector4};
     use test::{black_box, Bencher};
-
-    struct SimpleProblem {}
-
-    impl UnscentedKalmanfilterModel<f32, 4, 2, 2> for SimpleProblem {
-        fn motion_model(&self, x: &Vector4<f32>, u: &Vector2<f32>, dt: f32) -> Vector4<f32> {
-            let yaw = x[2];
-            let v = x[3];
-            Vector4::new(
-                x.x + yaw.cos() * v * dt,
-                x.y + yaw.sin() * v * dt,
-                yaw + u.y * dt,
-                u.x,
-            )
-        }
-
-        fn observation_model(&self, x: &Vector4<f32>) -> Vector2<f32> {
-            x.xy()
-        }
-    }
 
     #[bench]
     fn ukf(b: &mut Bencher) {
@@ -311,9 +297,15 @@ mod tests {
         // setup ukf
         let q = Matrix4::<f32>::from_diagonal(&Vector4::new(0.1, 0.1, deg2rad(1.0), 1.0));
         let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
-        let ukf = UnscentedKalmanFilter::<f32, 4, 2, 2>::new(q, r, 0.1, 2.0, 0.0);
-
-        let simple_problem = SimpleProblem {};
+        let ukf = UnscentedKalmanFilter::<f32, 4, 2, 2>::new(
+            q,
+            r,
+            Box::new(SimpleProblemMeasurementModel {}),
+            Box::new(SimpleProblemMotionModel {}),
+            0.1,
+            2.0,
+            0.0,
+        );
 
         let u: Vector2<f32> = Default::default();
         let kalman_state = GaussianState {
@@ -322,7 +314,7 @@ mod tests {
         };
         let z: Vector2<f32> = Default::default();
 
-        b.iter(|| black_box(ukf.estimate(&simple_problem, &kalman_state, &u, &z, dt)));
+        b.iter(|| black_box(ukf.estimate(&kalman_state, &u, &z, dt)));
     }
 
     #[bench]
@@ -332,9 +324,15 @@ mod tests {
         // setup ukf
         let q = Matrix4::<f32>::from_diagonal(&Vector4::new(0.1, 0.1, deg2rad(1.0), 1.0));
         let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
-        let ukf = UnscentedKalmanFilterArray::<f32, 4, 2, 2>::new(q, r, 0.1, 2.0, 0.0);
-
-        let simple_problem = SimpleProblem {};
+        let ukf = UnscentedKalmanFilterArray::<f32, 4, 2, 2>::new(
+            q,
+            r,
+            Box::new(SimpleProblemMeasurementModel {}),
+            Box::new(SimpleProblemMotionModel {}),
+            0.1,
+            2.0,
+            0.0,
+        );
 
         let u: Vector2<f32> = Default::default();
         let kalman_state = GaussianState {
@@ -343,6 +341,6 @@ mod tests {
         };
         let z: Vector2<f32> = Default::default();
 
-        b.iter(|| black_box(ukf.estimate(&simple_problem, &kalman_state, &u, &z, dt)));
+        b.iter(|| black_box(ukf.estimate(&kalman_state, &u, &z, dt)));
     }
 }

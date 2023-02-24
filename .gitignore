@@ -1,5 +1,6 @@
 img/
 target/
+data/
 
 # fleet
 .idea/

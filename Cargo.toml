@@ -12,6 +12,10 @@ repository = "https://github.com/jgsimard/RustRobotics"
 
 [dependencies]
 nalgebra = { version = "0.32"}
+
+# enum_dispatch = "0.3"
+# enum_delegate = "0.2"
+# fxhash = "0.2"
 # not used at the moment
 # pyo3 = { version = "0.18", features = ["extension-module"] }
 # numpy = "0.18" # for python port

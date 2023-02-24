@@ -3,6 +3,7 @@
 #![feature(test)]
 // my stuff
 pub mod localization;
+pub mod models;
 pub mod utils;
 
 // // python port // must include pyo3 to make this work
