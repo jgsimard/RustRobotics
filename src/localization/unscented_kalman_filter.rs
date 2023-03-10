@@ -137,161 +137,17 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
     }
 }
 
-/// S : State Size, Z: Observation Size, U: Input Size
-pub struct UnscentedKalmanFilterArray<T: RealField, const S: usize, const Z: usize, const U: usize>
-where
-    [(); 2 * S + 1]: Sized,
-{
-    pub Q: SMatrix<T, S, S>,
-    pub R: SMatrix<T, Z, Z>,
-    observation_model: Box<dyn MeasurementModel<T, S, Z>>,
-    motion_model: Box<dyn MotionModel<T, S, Z, U>>,
-    pub gamma: T,
-    pub mw: [T; 2 * S + 1],
-    pub cw: [T; 2 * S + 1],
-}
-
-impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
-    UnscentedKalmanFilterArray<T, S, Z, U>
-where
-    [(); 2 * S + 1]: Sized,
-{
-    pub fn new(
-        Q: SMatrix<T, S, S>,
-        R: SMatrix<T, Z, Z>,
-        observation_model: Box<dyn MeasurementModel<T, S, Z>>,
-        motion_model: Box<dyn MotionModel<T, S, Z, U>>,
-        alpha: T,
-        beta: T,
-        kappa: T,
-    ) -> UnscentedKalmanFilterArray<T, S, Z, U> {
-        let (mw, cw, gamma) =
-            UnscentedKalmanFilterArray::<T, S, Z, U>::sigma_weights(alpha, beta, kappa);
-        UnscentedKalmanFilterArray {
-            Q,
-            R,
-            observation_model,
-            motion_model,
-            gamma,
-            mw,
-            cw,
-        }
-    }
-    fn sigma_weights(alpha: T, beta: T, kappa: T) -> ([T; 2 * S + 1], [T; 2 * S + 1], T) {
-        let n = T::from_usize(S).unwrap();
-        let lambda = alpha.powi(2) * (n + kappa) - n;
-
-        let v = T::one() / ((T::one() + T::one()) * (n + lambda));
-        let mut mw = [v; 2 * S + 1];
-        let mut cw = [v; 2 * S + 1];
-
-        // special cases
-        let v = lambda / (n + lambda);
-        mw[0] = v;
-        cw[0] = v + T::one() - alpha.powi(2) + beta;
-
-        let gamma = (n + lambda).sqrt();
-        (mw, cw, gamma)
-    }
-
-    #[allow(clippy::uninit_assumed_init)]
-    fn generate_sigma_points(
-        &self,
-        state: &GaussianStateStatic<T, S>,
-    ) -> [SVector<T, S>; 2 * S + 1] {
-        // use cholesky to compute the matrix square root
-        let sigma = state.P.cholesky().expect("unable to sqrt").l() * self.gamma;
-        let mut sigma_points: [SVector<T, S>; 2 * S + 1] = [state.x; 2 * S + 1];
-        for i in 0..S {
-            let sigma_column = sigma.column(i);
-            sigma_points[i + 1] += sigma_column;
-            sigma_points[i + 1 + S] -= sigma_column;
-        }
-        sigma_points
-    }
-
-    pub fn estimate(
-        &self,
-        state: &GaussianStateStatic<T, S>,
-        u: &SVector<T, U>,
-        z: &SVector<T, Z>,
-        dt: T,
-    ) -> GaussianStateStatic<T, S> {
-        // predict
-        let sigma_points = self.generate_sigma_points(state);
-        let sp_xpred: Vec<SVector<T, S>> = sigma_points
-            .iter()
-            .map(|x| self.motion_model.prediction(x, u, dt))
-            .collect();
-
-        let mean_xpred: SVector<T, S> = sp_xpred
-            .iter()
-            .zip(self.mw.iter())
-            .map(|(x, w)| x * *w)
-            .sum();
-
-        let cov_xpred = sp_xpred
-            .iter()
-            .map(|x| x - mean_xpred)
-            .zip(self.cw.iter())
-            .map(|(dx, cw)| dx * dx.transpose() * *cw)
-            .sum::<SMatrix<T, S, S>>()
-            + self.Q;
-
-        let prediction = GaussianStateStatic {
-            x: mean_xpred,
-            P: cov_xpred,
-        };
-
-        // update
-        let sp_xpred = self.generate_sigma_points(&prediction);
-        let sp_z: Vec<SVector<T, Z>> = sp_xpred
-            .iter()
-            .map(|x| self.observation_model.prediction(x, None))
-            .collect();
-
-        let mean_z: SVector<T, Z> = sp_z.iter().zip(self.mw.iter()).map(|(x, w)| x * *w).sum();
-
-        let cov_z = sp_z
-            .iter()
-            .map(|x| x - mean_z)
-            .zip(self.cw.iter())
-            .map(|(dx, cw)| dx * dx.transpose() * *cw)
-            .sum::<SMatrix<T, Z, Z>>()
-            + self.R;
-
-        let s = sp_xpred
-            .iter()
-            .zip(sp_z.iter().zip(self.cw.iter()))
-            .map(|(x_pred, (z_point, cw))| {
-                (x_pred - mean_xpred) * (z_point - mean_z).transpose() * *cw
-            })
-            .sum::<SMatrix<T, S, Z>>();
-
-        let y = z - mean_z;
-        let kalman_gain = s * cov_z.try_inverse().unwrap();
-
-        let x_est = mean_xpred + kalman_gain * y;
-        let p_est = cov_xpred - kalman_gain * cov_z * kalman_gain.transpose();
-        GaussianStateStatic { x: x_est, P: p_est }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    extern crate test;
-    use crate::localization::unscented_kalman_filter::{
-        UnscentedKalmanFilter, UnscentedKalmanFilterArray,
-    };
+    use crate::localization::unscented_kalman_filter::UnscentedKalmanFilter;
     use crate::models::measurement::SimpleProblemMeasurementModel;
     use crate::models::motion::SimpleProblemMotionModel;
     use crate::utils::deg2rad;
     use crate::utils::state::GaussianStateStatic as GaussianState;
     use nalgebra::{Matrix4, Vector2, Vector4};
-    use test::{black_box, Bencher};
 
-    #[bench]
-    fn ukf(b: &mut Bencher) {
+    #[test]
+    fn ukf_runs() {
         let dt = 0.1;
 
         // setup ukf
@@ -314,33 +170,6 @@ mod tests {
         };
         let z: Vector2<f32> = Default::default();
 
-        b.iter(|| black_box(ukf.estimate(&kalman_state, &u, &z, dt)));
-    }
-
-    #[bench]
-    fn ukf_array(b: &mut Bencher) {
-        let dt = 0.1;
-
-        // setup ukf
-        let q = Matrix4::<f32>::from_diagonal(&Vector4::new(0.1, 0.1, deg2rad(1.0), 1.0));
-        let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
-        let ukf = UnscentedKalmanFilterArray::<f32, 4, 2, 2>::new(
-            q,
-            r,
-            Box::new(SimpleProblemMeasurementModel {}),
-            Box::new(SimpleProblemMotionModel {}),
-            0.1,
-            2.0,
-            0.0,
-        );
-
-        let u: Vector2<f32> = Default::default();
-        let kalman_state = GaussianState {
-            x: Vector4::<f32>::new(0., 0., 0., 0.),
-            P: Matrix4::<f32>::identity(),
-        };
-        let z: Vector2<f32> = Default::default();
-
-        b.iter(|| black_box(ukf.estimate(&kalman_state, &u, &z, dt)));
+        ukf.estimate(&kalman_state, &u, &z, dt);
     }
 }

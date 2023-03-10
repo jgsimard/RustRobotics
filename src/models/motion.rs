@@ -146,12 +146,10 @@ impl MotionModel<f32, 4, 2, 2> for SimpleProblemMotionModel {
 //             MM::Velocity(mm) => mm.jacobian_wrt_input(x, u, dt)
 //         }
 //     }
-
 //     fn jacobian_wrt_state(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SMatrix<T, S, S> {
 //         match self {
 //             MM::SimpleProblemMotionModel(mm) => mm.jacobian_wrt_state(x, u, dt),
 //             MM::Velocity(mm) => mm.jacobian_wrt_state(x, u, dt)
 //         }
 //     }
-
 // // }

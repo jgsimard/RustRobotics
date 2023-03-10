@@ -1,7 +1,4 @@
-#![allow(incomplete_features)]
-#![feature(generic_const_exprs)] // for testing replacing Vec<T> by [T; N] in some places
-#![feature(test)]
-// my stuff
+pub mod data;
 pub mod localization;
 pub mod models;
 pub mod utils;

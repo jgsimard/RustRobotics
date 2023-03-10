@@ -1,6 +1,8 @@
 use nalgebra::{Matrix2, Matrix4, Vector2, Vector4};
 use plotters::prelude::*;
 use rand_distr::{Distribution, Normal};
+use robotics::models::measurement::{MeasurementModel, SimpleProblemMeasurementModel};
+use robotics::models::motion::{MotionModel, SimpleProblemMotionModel};
 use std::error::Error;
 
 #[path = "../plot.rs"]
@@ -9,8 +11,6 @@ use plot::{chart, History};
 
 extern crate robotics;
 use robotics::localization::extended_kalman_filter::ExtendedKalmanFilter;
-use robotics::models::measurement::{MeasurementModel, SimpleProblemMeasurementModel};
-use robotics::models::motion::{MotionModel, SimpleProblemMotionModel};
 use robotics::utils::deg2rad;
 use robotics::utils::state::GaussianStateStatic as GaussianState;
 

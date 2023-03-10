@@ -131,17 +131,15 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
 
 #[cfg(test)]
 mod tests {
-    extern crate test;
     use crate::localization::extended_kalman_filter::ExtendedKalmanFilter;
     use crate::models::measurement::SimpleProblemMeasurementModel;
     use crate::models::motion::SimpleProblemMotionModel;
     use crate::utils::deg2rad;
     use crate::utils::state::GaussianStateStatic as GaussianState;
     use nalgebra::{Matrix4, Vector2, Vector4};
-    use test::{black_box, Bencher};
 
-    #[bench]
-    fn ekf(b: &mut Bencher) {
+    #[test]
+    fn ekf_runs() {
         // setup ukf
         let q = Matrix4::<f32>::from_diagonal(&Vector4::new(0.1, 0.1, deg2rad(1.0), 1.0));
         let r = nalgebra::Matrix2::identity();
@@ -157,8 +155,6 @@ mod tests {
         };
         let z: Vector2<f32> = Default::default();
 
-        b.iter(|| {
-            black_box(ekf.estimate(&kalman_state, &u, &z, dt));
-        });
+        ekf.estimate(&kalman_state, &u, &z, dt);
     }
 }

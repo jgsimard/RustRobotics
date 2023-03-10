@@ -6,7 +6,8 @@ pub trait MeasurementModel<T: RealField, const S: usize, const Z: usize> {
 }
 
 /// Measurement = [range, bearing, signature]
-pub struct RangeBearing {}
+/// Probabilistic Robotics p. 177
+pub struct RangeBearing;
 
 impl MeasurementModel<f32, 3, 2> for RangeBearing {
     fn prediction(&self, x: &Vector3<f32>, landmark: Option<&Vector2<f32>>) -> Vector2<f32> {
@@ -46,7 +47,7 @@ impl MeasurementModel<f32, 3, 2> for RangeBearing {
     }
 }
 
-pub struct SimpleProblemMeasurementModel {}
+pub struct SimpleProblemMeasurementModel;
 
 impl MeasurementModel<f32, 4, 2> for SimpleProblemMeasurementModel {
     fn prediction(&self, x: &Vector4<f32>, _landmark: Option<&Vector2<f32>>) -> Vector2<f32> {
@@ -56,9 +57,9 @@ impl MeasurementModel<f32, 4, 2> for SimpleProblemMeasurementModel {
     #[allow(clippy::deprecated_cfg_attr)]
     fn jacobian(&self, _x: &Vector4<f32>, _landmark: Option<&Vector2<f32>>) -> Matrix2x4<f32> {
         #[cfg_attr(rustfmt, rustfmt_skip)]
-            Matrix2x4::<f32>::new(
-                1., 0., 0., 0.,
-                0., 1., 0., 0.
-            )
+        Matrix2x4::<f32>::new(
+            1., 0., 0., 0.,
+            0., 1., 0., 0.
+        )
     }
 }

@@ -1,6 +1,7 @@
 img/
 target/
-data/
+dataset/
+src/main.rs
 
 # fleet
 .idea/
