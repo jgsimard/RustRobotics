@@ -12,10 +12,9 @@ repository = "https://github.com/jgsimard/RustRobotics"
 
 [dependencies]
 nalgebra = "0.32"
-polars = { version = "0.27", features = ["lazy", "csv-file"]}
-rand = "0.8"
-rand_distr = "0.4"
 plotters = "0.3"
+csv = "1.2"
+serde = { version = "1.0", features = ["derive"] }
 # enum_dispatch = "0.3"
 # enum_delegate = "0.2"
 # fxhash = "0.2"
@@ -24,8 +23,8 @@ plotters = "0.3"
 # numpy = "0.18" # for python port
 
 [dev-dependencies]
-# rand = "0.8"
-# rand_distr = "0.4"
+rand = "0.8"
+rand_distr = "0.4"
 # plotters = "0.3"
 criterion = "0.4"
 
@@ -33,6 +32,13 @@ criterion = "0.4"
 [lib]
 name = "robotics"
 crate-type = ["cdylib", "lib"] # cdylib=python, lib=rust
+
+[profile.dev]
+opt-level = 1
+debug = 2
+incremental = true
+codegen-units = 512
+
 
 [[example]]
 name = "ekf"
@@ -47,3 +53,4 @@ path = "examples/localization/unscented_kalman_filter.rs"
 [[bench]]
 name = "kf_benchmark"
 harness = false
+
