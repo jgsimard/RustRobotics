@@ -33,8 +33,8 @@ struct SimpleProblem {
     // dx/dv = dt*cos(yaw)
     // dy/dyaw = v*dt*cos(yaw)
     // dy/dv = dt*sin(yaw)
-    pub gps_noise: Matrix2<f32>,
-    pub input_noise: Matrix2<f32>,
+    pub gps_noise: Matrix2<f64>,
+    pub input_noise: Matrix2<f64>,
     pub motion_model: SimpleProblemMotionModel,
     pub observation_model: SimpleProblemMeasurementModel,
 }
@@ -42,11 +42,11 @@ struct SimpleProblem {
 impl SimpleProblem {
     fn observation(
         &self,
-        x_true: &Vector4<f32>,
-        x_deterministic: &Vector4<f32>,
-        u: &Vector2<f32>,
-        dt: f32,
-    ) -> (Vector4<f32>, Vector2<f32>, Vector4<f32>, Vector2<f32>) {
+        x_true: &Vector4<f64>,
+        x_deterministic: &Vector4<f64>,
+        u: &Vector2<f64>,
+        dt: f64,
+    ) -> (Vector4<f64>, Vector2<f64>, Vector4<f64>, Vector2<f64>) {
         let mut rng = rand::thread_rng();
         let normal = Normal::new(0., 1.).unwrap();
 
@@ -74,11 +74,11 @@ fn run() -> History {
     let mut time = 0.;
 
     // state : [x, y, yaw, v]
-    let mut q = Matrix4::<f32>::from_diagonal(&Vector4::new(0.1, 0.1, deg2rad(1.0), 1.0));
+    let mut q = Matrix4::<f64>::from_diagonal(&Vector4::new(0.1, 0.1, deg2rad(1.0), 1.0));
     q = q * q; // predict state covariance
 
     let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
-    let ukf = UnscentedKalmanFilter::<f32, 4, 2, 2>::new(
+    let ukf = UnscentedKalmanFilter::<f64, 4, 2, 2>::new(
         q,
         r,
         Box::new(SimpleProblemMeasurementModel {}),
@@ -95,15 +95,15 @@ fn run() -> History {
         motion_model: SimpleProblemMotionModel {},
     };
 
-    let u = Vector2::<f32>::new(1.0, 0.1);
-    let mut ud: Vector2<f32>;
-    let mut x_dr = Vector4::<f32>::new(0., 0., 0., 0.);
-    let mut x_true = Vector4::<f32>::new(0., 0., 0., 0.);
+    let u = Vector2::<f64>::new(1.0, 0.1);
+    let mut ud: Vector2<f64>;
+    let mut x_dr = Vector4::<f64>::new(0., 0., 0., 0.);
+    let mut x_true = Vector4::<f64>::new(0., 0., 0., 0.);
     let mut kalman_state = GaussianState {
-        x: Vector4::<f32>::new(0., 0., 0., 0.),
-        P: Matrix4::<f32>::identity(),
+        x: Vector4::<f64>::new(0., 0., 0., 0.),
+        P: Matrix4::<f64>::identity(),
     };
-    let mut z: Vector2<f32>;
+    let mut z: Vector2<f64>;
 
     let mut history = History::default();
 

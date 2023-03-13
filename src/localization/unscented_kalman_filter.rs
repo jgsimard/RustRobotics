@@ -151,9 +151,9 @@ mod tests {
         let dt = 0.1;
 
         // setup ukf
-        let q = Matrix4::<f32>::from_diagonal(&Vector4::new(0.1, 0.1, deg2rad(1.0), 1.0));
+        let q = Matrix4::<f64>::from_diagonal(&Vector4::new(0.1, 0.1, deg2rad(1.0), 1.0));
         let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
-        let ukf = UnscentedKalmanFilter::<f32, 4, 2, 2>::new(
+        let ukf = UnscentedKalmanFilter::<f64, 4, 2, 2>::new(
             q,
             r,
             Box::new(SimpleProblemMeasurementModel {}),
@@ -163,12 +163,12 @@ mod tests {
             0.0,
         );
 
-        let u: Vector2<f32> = Default::default();
+        let u: Vector2<f64> = Default::default();
         let kalman_state = GaussianState {
-            x: Vector4::<f32>::new(0., 0., 0., 0.),
-            P: Matrix4::<f32>::identity(),
+            x: Vector4::<f64>::new(0., 0., 0., 0.),
+            P: Matrix4::<f64>::identity(),
         };
-        let z: Vector2<f32> = Default::default();
+        let z: Vector2<f64> = Default::default();
 
         ukf.estimate(&kalman_state, &u, &z, dt);
     }
