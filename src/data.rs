@@ -1,62 +1,62 @@
 use csv;
-use plotters::prelude::*;
+// use plotters::prelude::*;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct RangeBearing {
-    time: f64,
-    subject_nb: u32,
-    range: f64,
-    bearing: f64,
+pub struct RangeBearing {
+    pub time: f64,
+    pub subject_nb: u32,
+    pub range: f64,
+    pub bearing: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Position {
-    time: f64,
-    x: f64,
-    y: f64,
-    orientation: f64,
+pub struct Position {
+    pub time: f64,
+    pub x: f64,
+    pub y: f64,
+    pub orientation: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-struct Odometry {
-    time: f64,
-    forward_velocity: f64,
-    angular_velocity: f64,
+pub struct Odometry {
+    pub time: f64,
+    pub forward_velocity: f64,
+    pub angular_velocity: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Landmark {
-    subject_nb: u32,
-    x: f64,
-    y: f64,
-    x_std_dev: f64,
-    y_std_dev: f64,
+pub struct Landmark {
+    pub subject_nb: u32,
+    pub x: f64,
+    pub y: f64,
+    pub x_std_dev: f64,
+    pub y_std_dev: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct Barcode {
+pub struct Barcode {
     subject_nb: u32,
     barcode_nb: u32,
 }
 
 // #[allow(dead_code)]
-struct UtiasDataset {
+pub struct UtiasDataset {
     #[allow(dead_code)]
-    pub barcodes: Vec<Barcode>,
+    // pub barcodes: Vec<Barcode>,
     pub groundtruth: Vec<Position>,
-    pub landmarks: Vec<Landmark>,
+    // pub landmarks: Vec<Landmark>,
+    pub landmarks: FxHashMap<u32, Landmark>,
     pub measurements: Vec<RangeBearing>,
     pub odometry: Vec<Odometry>,
-    // index_measurements: usize,
-    // index_odometry: usize,
 }
 
 // iterator
 // Consuming iterator
-// TODO : remove the clones
-struct UtiasDatasetIterator {
+// TODO : remove the clonessubject_nb
+pub struct UtiasDatasetIterator {
     dataset: UtiasDataset,
     index_measurements: usize,
     index_odometry: usize,
@@ -86,8 +86,8 @@ impl Iterator for UtiasDatasetIterator {
             .skip(self.index_measurements);
         let mut od = self.dataset.odometry.iter().skip(self.index_odometry);
 
-        let me_next = me.next().unwrap();
-        let od_next = od.next().unwrap();
+        let me_next = me.next()?;
+        let od_next = od.next()?;
 
         if od_next.time < me_next.time {
             self.index_odometry += 1;
@@ -97,7 +97,7 @@ impl Iterator for UtiasDatasetIterator {
         self.index_measurements += 1;
         loop {
             let me_next = me.next().unwrap();
-            if me_next.time == measurements.last().unwrap().time {
+            if me_next.time == measurements.last()?.time {
                 measurements.push(me_next.clone());
                 self.index_measurements += 1;
             } else {
@@ -112,7 +112,7 @@ impl Iterator for UtiasDatasetIterator {
 }
 
 // Non-Consuming iterator
-struct UtiasDatasetIteratorRef<'a> {
+pub struct UtiasDatasetIteratorRef<'a> {
     dataset: &'a UtiasDataset,
     index_measurements: usize,
     index_odometry: usize,
@@ -142,8 +142,8 @@ impl<'a> Iterator for UtiasDatasetIteratorRef<'a> {
             .skip(self.index_measurements);
         let mut od = self.dataset.odometry.iter().skip(self.index_odometry);
 
-        let me_next = me.next().unwrap();
-        let od_next = od.next().unwrap();
+        let me_next = me.next()?;
+        let od_next = od.next()?;
 
         if od_next.time < me_next.time {
             self.index_odometry += 1;
@@ -152,8 +152,8 @@ impl<'a> Iterator for UtiasDatasetIteratorRef<'a> {
         let mut measurements = vec![me_next];
         self.index_measurements += 1;
         loop {
-            let me_next = me.next().unwrap();
-            if me_next.time == measurements.last().unwrap().time {
+            let me_next = me.next()?;
+            if me_next.time == measurements.last()?.time {
                 measurements.push(me_next);
                 self.index_measurements += 1;
             } else {
@@ -169,7 +169,7 @@ impl<'a> Iterator for UtiasDatasetIteratorRef<'a> {
 
 impl UtiasDataset {
     #[allow(dead_code)]
-    fn new(dataset: i32) -> Result<UtiasDataset, Box<dyn Error>> {
+    pub fn new(dataset: i32) -> Result<UtiasDataset, Box<dyn Error>> {
         let base = match dataset {
             0 => "dataset/dataset0",
             1 => "dataset/dataset1",
@@ -181,11 +181,21 @@ impl UtiasDataset {
             .map(|x| x.unwrap())
             .collect();
 
-        let landmarks: Vec<Landmark> =
+        let landmarks_vec: Vec<Landmark> =
             csv::Reader::from_path(format!("{base}/Landmark_Groundtruth.csv"))?
                 .deserialize()
                 .map(|x| x.unwrap())
                 .collect();
+
+        let mut landmarks = FxHashMap::default();
+        for lm in landmarks_vec {
+            let k = barcodes
+                .iter()
+                .find(|bc| bc.subject_nb == lm.subject_nb)
+                .unwrap()
+                .barcode_nb;
+            landmarks.insert(k, lm);
+        }
 
         let groundtruth: Vec<Position> = csv::Reader::from_path(format!("{base}/Groundtruth.csv"))?
             .deserialize()
@@ -212,72 +222,12 @@ impl UtiasDataset {
         odometry.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
 
         Ok(UtiasDataset {
-            barcodes,
             groundtruth,
             landmarks,
             measurements,
             odometry,
         })
     }
-}
-
-#[allow(dead_code)]
-fn plot(dataset: &UtiasDataset) -> Result<(), Box<dyn Error>> {
-    let root = BitMapBackend::new("./img/ekf_landmarksXXX.png", (1024, 768)).into_drawing_area();
-    root.fill(&WHITE)?;
-    let name = "EKF landmarks";
-    let min_x = 0.0;
-    let max_x = 5.0;
-    let min_y = -6.0;
-    let max_y = 5.0;
-
-    let mut chart = ChartBuilder::on(&root)
-        .margin(10)
-        .caption(name, ("sans-serif", 40))
-        .build_cartesian_2d(min_x..max_x, min_y..max_y)?;
-
-    chart.configure_mesh().draw()?;
-
-    chart
-        .draw_series(
-            dataset
-                .groundtruth
-                .iter()
-                .take(5000)
-                .map(|p| Circle::new((p.x, p.y), 1, BLUE.filled())),
-        )?
-        .label("Ground truth")
-        .legend(|(x, y)| Circle::new((x, y), 3, BLUE.filled()));
-
-    chart
-        .draw_series(
-            dataset
-                .landmarks
-                .iter()
-                .map(|lm| Circle::new((lm.x, lm.y), 5, RED.filled())),
-        )?
-        .label("Landmarks")
-        .legend(|(x, y)| Circle::new((x, y), 5, RED.filled()));
-
-    chart.draw_series(dataset.landmarks.iter().map(|lm| {
-        Text::new(
-            format!("{:?}", lm.subject_nb),
-            (lm.x + 0.05, lm.y),
-            ("sans-serif", 15),
-        )
-    }))?;
-
-    chart
-        .configure_series_labels()
-        .position(SeriesLabelPosition::LowerRight)
-        .border_style(BLACK)
-        .draw()?;
-
-    root.present().expect(
-        "Unable to write result to file, please make sure 'img' dir exists under current dir",
-    );
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -287,12 +237,9 @@ mod tests {
     #[test]
     fn read_dataset0() -> Result<(), Box<dyn Error>> {
         let dataset = UtiasDataset::new(0)?;
-        println!("{:?}", dataset.barcodes);
-        plot(&dataset);
         for (i, data) in (&dataset).into_iter().take(5).enumerate() {
             println!("{i} => {:?}", data);
         }
-        plot(&dataset);
         Ok(())
     }
 

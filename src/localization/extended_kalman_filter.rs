@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 use nalgebra::{RealField, SMatrix, SVector};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use crate::models::measurement::MeasurementModel;
 use crate::models::motion::MotionModel;
@@ -67,7 +67,7 @@ pub struct ExtendedKalmanFilterKnownCorrespondences<
 > {
     R: SMatrix<T, S, S>,
     Q: SMatrix<T, Z, Z>,
-    landmarks: HashMap<i32, SVector<T, Z>>,
+    landmarks: FxHashMap<u32, SVector<T, S>>,
     measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
     motion_model: Box<dyn MotionModel<T, S, Z, U>>,
 }
@@ -78,13 +78,14 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
     pub fn new(
         R: SMatrix<T, S, S>,
         Q: SMatrix<T, Z, Z>,
+        landmarks: FxHashMap<u32, SVector<T, S>>,
         measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
         motion_model: Box<dyn MotionModel<T, S, Z, U>>,
     ) -> ExtendedKalmanFilterKnownCorrespondences<T, S, Z, U> {
         ExtendedKalmanFilterKnownCorrespondences {
             Q,
             R,
-            landmarks: HashMap::new(),
+            landmarks,
             measurement_model,
             motion_model,
         }
@@ -93,38 +94,45 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
     pub fn estimate(
         &self,
         estimate: &GaussianStateStatic<T, S>,
-        u: &SVector<T, U>,
-        z_vec: &[(i32, SVector<T, Z>)],
+        u: Option<SVector<T, U>>,
+        z_vec: Option<Vec<(u32, SVector<T, Z>)>>,
         dt: T,
     ) -> GaussianStateStatic<T, S> {
         // predict
-        let G = self
-            .motion_model
-            .jacobian_wrt_state(&estimate.x, u, dt.clone());
+        let (mut x_est, mut p_est) = if let Some(u_) = u {
+            let G = self
+                .motion_model
+                .jacobian_wrt_state(&estimate.x, &u_, dt.clone());
 
-        // fixed version
-        let mut x_est = self.motion_model.prediction(&estimate.x, u, dt);
-        let mut p_est = &G * &estimate.P * G.transpose() + &self.R;
+            // fixed version
+            let x_est = self.motion_model.prediction(&estimate.x, &u_, dt);
+            let p_est = &G * &estimate.P * G.transpose() + &self.R;
 
-        // version with adjustable R
-        // let V = model.jacobian_motion_model_wrt_input(&estimate.x, u, dt.clone());
-        // let M = model.cov_control_model(u, dt.clone());
-        // let mut p_est = &G * &estimate.P * G.transpose() + &V * M * V.transpose();
+            // version with adjustable R
+            // let V = model.jacobian_motion_model_wrt_input(&estimate.x, u, dt.clone());
+            // let M = model.cov_control_model(u, dt.clone());
+            // let mut p_est = &G * &estimate.P * G.transpose() + &V * M * V.transpose();
+            (x_est, p_est)
+        } else {
+            (estimate.x.clone(), estimate.P.clone())
+        };
 
         // update / correction step
-        for (id, z) in z_vec
-            .iter()
-            .filter(|(id, _v)| self.landmarks.contains_key(id))
-        {
-            let landmark = self.landmarks.get(id).unwrap();
+        if let Some(zz) = z_vec {
+            println!("{:?}", zz);
+            for (id, z) in zz.iter().filter(|(id, _v)| self.landmarks.contains_key(id)) {
+                println!("OBS update {id}");
+                let landmark = self.landmarks.get(id).unwrap();
 
-            let z_pred = self.measurement_model.prediction(&x_est, Some(landmark));
-            let H = self.measurement_model.jacobian(&x_est, Some(landmark));
-            let s = &H * &p_est * H.transpose() + &self.Q;
-            let kalman_gain = &p_est * H.transpose() * s.try_inverse().unwrap();
-            x_est += &kalman_gain * (z - z_pred);
-            p_est = (SMatrix::<T, S, S>::identity() - kalman_gain * H) * &p_est
+                let z_pred = self.measurement_model.prediction(&x_est, Some(landmark));
+                let H = self.measurement_model.jacobian(&x_est, Some(landmark));
+                let s = &H * &p_est * H.transpose() + &self.Q;
+                let kalman_gain = &p_est * H.transpose() * s.try_inverse().unwrap();
+                x_est += &kalman_gain * (z - z_pred);
+                p_est = (SMatrix::<T, S, S>::identity() - kalman_gain * H) * &p_est
+            }
         }
+
         GaussianStateStatic { x: x_est, P: p_est }
     }
 }
