@@ -50,6 +50,10 @@ path = "examples/localization/extended_kalman_filter.rs"
 name = "ukf"
 path = "examples/localization/unscented_kalman_filter.rs"
 
+[[example]]
+name = "ekf_lm"
+path = "examples/localization/extended_kalman_filter_landmarks.rs"
+
 
 [[bench]]
 name = "kf_benchmark"

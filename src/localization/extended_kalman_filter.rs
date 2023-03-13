@@ -97,23 +97,24 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
     pub fn estimate(
         &self,
         estimate: &GaussianStateStatic<T, S>,
-        u: Option<SVector<T, U>>,
-        z_vec: Option<Vec<(u32, SVector<T, Z>)>>,
+        control: Option<SVector<T, U>>,
+        measurements: Option<Vec<(u32, SVector<T, Z>)>>,
         dt: T,
     ) -> GaussianStateStatic<T, S> {
         // predict
-        let (mut x_est, mut p_est) = if let Some(u_) = u {
+        let (mut x_est, mut p_est) = if let Some(u) = control {
             let G = self
                 .motion_model
-                .jacobian_wrt_state(&estimate.x, &u_, dt.clone());
+                .jacobian_wrt_state(&estimate.x, &u, dt.clone());
 
-            // fixed version
-            let x_est = self.motion_model.prediction(&estimate.x, &u_, dt.clone());
+            let x_est = self.motion_model.prediction(&estimate.x, &u, dt.clone());
             let p_est = if self.fixed_noise {
+                // fixed version
                 &G * &estimate.P * G.transpose() + &self.R
             } else {
-                let V = self.motion_model.jacobian_wrt_input(&estimate.x, &u_, dt);
-                let M = self.motion_model.cov_noise_control_space(&u_);
+                // adaptive version
+                let V = self.motion_model.jacobian_wrt_input(&estimate.x, &u, dt);
+                let M = self.motion_model.cov_noise_control_space(&u);
                 &G * &estimate.P * G.transpose() + &V * M * V.transpose()
             };
 
@@ -123,12 +124,14 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
         };
 
         // update / correction step
-        if let Some(zz) = z_vec {
-            for (id, z) in zz.iter().filter(|(id, _v)| self.landmarks.contains_key(id)) {
-                let landmark = self.landmarks.get(id).unwrap();
-
-                let z_pred = self.measurement_model.prediction(&x_est, Some(landmark));
-                let H = self.measurement_model.jacobian(&x_est, Some(landmark));
+        if let Some(measurements) = measurements {
+            for (id, z) in measurements
+                .iter()
+                .filter(|(id, _v)| self.landmarks.contains_key(id))
+            {
+                let landmark = self.landmarks.get(id);
+                let z_pred = self.measurement_model.prediction(&x_est, landmark);
+                let H = self.measurement_model.jacobian(&x_est, landmark);
                 let s = &H * &p_est * H.transpose() + &self.Q;
                 let kalman_gain = &p_est * H.transpose() * s.try_inverse().unwrap();
                 x_est += &kalman_gain * (z - z_pred);
