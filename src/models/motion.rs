@@ -18,13 +18,34 @@ impl MotionModel<f64, 3, 2, 2> for Velocity {
         let theta = x[2];
         //control
         let v = u[0];
-        let w = x[1];
-        let delta = Vector3::new(
-            v / w * (-theta.sin() + (theta + w * dt).sin()),
-            v / w * (theta.cos() - (theta + w * dt).cos()),
-            w * dt,
-        );
-        x + delta
+        let w = u[1];
+        let delta = if w != 0.0 {
+            Vector3::new(
+                v / w * (-theta.sin() + (theta + w * dt).sin()),
+                v / w * (theta.cos() - (theta + w * dt).cos()),
+                w * dt,
+            )
+        } else {
+            // no rotation
+            Vector3::new(v * theta.cos() * dt, v * theta.sin() * dt, 0.0)
+        };
+        // let delta = Vector3::new(
+        //     v * theta.cos() * dt,
+        //     v * theta.sin() * dt,
+        //     w * dt,
+        // );
+        let mut out = x + delta;
+
+        // Limit theta within [-pi, pi]
+        let mut theta_out = out[2];
+        if theta_out > std::f64::consts::PI {
+            theta_out -= 2.0 * std::f64::consts::PI;
+        } else if theta_out < -std::f64::consts::PI {
+            theta_out += 2.0 * std::f64::consts::PI;
+        }
+        out[2] = theta_out;
+
+        out
     }
 
     #[allow(clippy::deprecated_cfg_attr)]
@@ -34,12 +55,21 @@ impl MotionModel<f64, 3, 2, 2> for Velocity {
         //control
         let v = u[0];
         let w = u[1];
-        #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix3::<f64>::new(
-            1., 0., v / w * (-theta.cos() + (theta + w * dt).cos()),
-            0., 1., v / w * (-theta.sin() + (theta + w * dt).sin()),
-            0., 0., 1.
-        )
+        if w != 0.0 {
+            #[cfg_attr(rustfmt, rustfmt_skip)]
+            Matrix3::<f64>::new(
+                1., 0., v / w * (-theta.cos() + (theta + w * dt).cos()),
+                0., 1., v / w * (-theta.sin() + (theta + w * dt).sin()),
+                0., 0., 1.
+            )
+        } else {
+            #[cfg_attr(rustfmt, rustfmt_skip)]
+            Matrix3::<f64>::new(
+                1., 0., -v * theta.sin() * dt,
+                0., 1., -v * theta.cos() * dt,
+                0., 0., 1.
+            )
+        }
     }
 
     #[allow(clippy::deprecated_cfg_attr)]

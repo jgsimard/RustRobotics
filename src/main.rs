@@ -1,5 +1,6 @@
 use nalgebra::{Matrix2, Matrix3, Vector2, Vector3};
 use plotters::prelude::*;
+use plotters::style::full_palette::PINK;
 use robotics::utils::state::GaussianStateStatic;
 use rustc_hash::FxHashMap;
 use std::error::Error;
@@ -13,6 +14,7 @@ use robotics::models::motion::Velocity;
 fn plot(
     dataset: &UtiasDataset,
     states: &[GaussianStateStatic<f64, 3>],
+    states_measurement: &[GaussianStateStatic<f64, 3>],
 ) -> Result<(), Box<dyn Error>> {
     let root = BitMapBackend::new("./img/ekf_landmarksHELLO.png", (1024, 768)).into_drawing_area();
     root.fill(&WHITE)?;
@@ -65,11 +67,20 @@ fn plot(
         .draw_series(
             states
                 .iter()
-                .take(5000)
                 .map(|gs| Circle::new((gs.x[0], gs.x[1]), 1, GREEN.filled())),
         )?
         .label("Estimates")
         .legend(|(x, y)| Circle::new((x, y), 3, GREEN.filled()));
+
+    // States
+    chart
+        .draw_series(
+            states_measurement
+                .iter()
+                .map(|gs| Circle::new((gs.x[0], gs.x[1]), 1, PINK.filled())),
+        )?
+        .label("Estimates Measurements")
+        .legend(|(x, y)| Circle::new((x, y), 3, PINK.filled()));
 
     // Legend
     chart
@@ -147,7 +158,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     println!("measurement updates = {}", states_measurement.len());
 
-    plot(&dataset, &states)?;
+    plot(&dataset, &states, &states_measurement)?;
 
     Ok(())
 }

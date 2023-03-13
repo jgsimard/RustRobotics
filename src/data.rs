@@ -45,9 +45,7 @@ pub struct Barcode {
 // #[allow(dead_code)]
 pub struct UtiasDataset {
     #[allow(dead_code)]
-    // pub barcodes: Vec<Barcode>,
     pub groundtruth: Vec<Position>,
-    // pub landmarks: Vec<Landmark>,
     pub landmarks: FxHashMap<u32, Landmark>,
     pub measurements: Vec<RangeBearing>,
     pub odometry: Vec<Odometry>,
@@ -196,22 +194,23 @@ impl UtiasDataset {
                 .barcode_nb;
             landmarks.insert(k, lm);
         }
+        println!("{:?}", landmarks);
 
-        let groundtruth: Vec<Position> = csv::Reader::from_path(format!("{base}/Groundtruth.csv"))?
-            .deserialize()
-            .map(|x| x.unwrap())
-            .collect();
-
-        let min_time = groundtruth.iter().map(|p| p.time).reduce(f64::min).unwrap();
+        let mut groundtruth: Vec<Position> =
+            csv::Reader::from_path(format!("{base}/Groundtruth.csv"))?
+                .deserialize()
+                .map(|x| x.unwrap())
+                .collect();
+        groundtruth.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
+        let min_time = groundtruth.first().unwrap().time;
 
         let mut measurements: Vec<RangeBearing> =
             csv::Reader::from_path(format!("{base}/Measurement.csv"))?
                 .deserialize()
                 .map(|x| x.unwrap())
-                .filter(|rb: &RangeBearing| (rb.range != 0.0) | (rb.bearing != 0.0))
+                // .filter(|rb: &RangeBearing| (rb.range != 0.0) | (rb.bearing != 0.0))
                 .filter(|rb: &RangeBearing| rb.time >= min_time)
                 .collect();
-
         measurements.sort_by(|a, b| a.time.partial_cmp(&b.time).unwrap());
 
         let mut odometry: Vec<Odometry> = csv::Reader::from_path(format!("{base}/Odometry.csv"))?
