@@ -194,7 +194,6 @@ impl UtiasDataset {
                 .barcode_nb;
             landmarks.insert(k, lm);
         }
-        println!("{:?}", landmarks);
 
         let mut groundtruth: Vec<Position> =
             csv::Reader::from_path(format!("{base}/Groundtruth.csv"))?

@@ -116,29 +116,21 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
         } else {
             (estimate.x.clone(), estimate.P.clone())
         };
-        // println!("middle {x_est}");
 
         // update / correction step
         if let Some(zz) = z_vec {
-            println!("{:?}", zz);
             for (id, z) in zz.iter().filter(|(id, _v)| self.landmarks.contains_key(id)) {
-                println!("OBS update {id}");
                 let landmark = self.landmarks.get(id).unwrap();
 
                 let z_pred = self.measurement_model.prediction(&x_est, Some(landmark));
-                println!("z_pred = {z_pred}");
                 let H = self.measurement_model.jacobian(&x_est, Some(landmark));
-                println!("H = {H}");
-                println!("p_est = {p_est}");
                 let s = &H * &p_est * H.transpose() + &self.Q;
-                println!("s = {s}");
                 let kalman_gain = &p_est * H.transpose() * s.try_inverse().unwrap();
                 x_est += &kalman_gain * (z - z_pred);
                 p_est = (SMatrix::<T, S, S>::identity() - kalman_gain * H) * &p_est
             }
         }
 
-        println!("before{}, after{}", estimate.x, x_est);
         GaussianStateStatic { x: x_est, P: p_est }
     }
 }

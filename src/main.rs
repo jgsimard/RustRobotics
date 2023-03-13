@@ -129,7 +129,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         motion_model,
     );
     for (measurements, odometry) in (&dataset).into_iter().take(5000) {
-        // println!("{:?}, {:?}", measurements, odometry);
         let (time_now, measurement_update) = if let Some(m) = measurements.clone() {
             (m.first().unwrap().time, true)
         } else if let Some(od) = odometry.cloned() {
@@ -139,7 +138,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         };
         let dt = time_now - time_past;
         time_past = time_now;
-        // println!("dt={dt}, time_now={time_now}");
 
         let measurements = measurements.map(|ms| {
             ms.iter()

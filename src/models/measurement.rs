@@ -14,7 +14,7 @@ impl MeasurementModel<f64, 3, 2> for RangeBearingMeasurementModel {
         //state
         let x_x = x[0];
         let x_y = x[1];
-        // let x_theta = x[2];
+        let x_theta = x[2];
         // landmark
         let Some(lm) = landmark else{
             panic!("WRONG!!!")
@@ -26,7 +26,7 @@ impl MeasurementModel<f64, 3, 2> for RangeBearingMeasurementModel {
         let q_sqrt = q.sqrt();
 
         let range = q_sqrt;
-        let bearing = f64::atan2(l_y - x_y, l_x - x_x);
+        let bearing = f64::atan2(l_y - x_y, l_x - x_x) - x_theta;
         Vector2::new(range, bearing)
     }
 
