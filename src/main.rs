@@ -15,8 +15,9 @@ fn plot(
     dataset: &UtiasDataset,
     states: &[GaussianStateStatic<f64, 3>],
     states_measurement: &[GaussianStateStatic<f64, 3>],
+    max_time: f64,
 ) -> Result<(), Box<dyn Error>> {
-    let root = BitMapBackend::new("./img/ekf_landmarksHELLO.png", (1024, 768)).into_drawing_area();
+    let root = BitMapBackend::new("./img/ekf_landmarks.png", (1024, 768)).into_drawing_area();
     root.fill(&WHITE)?;
     let name = "EKF landmarks";
     let min_x = 0.0;
@@ -37,7 +38,7 @@ fn plot(
             dataset
                 .groundtruth
                 .iter()
-                .take(5000)
+                .filter(|p| p.time <= max_time)
                 .map(|p| Circle::new((p.x, p.y), 1, BLUE.filled())),
         )?
         .label("Ground truth")
@@ -54,9 +55,10 @@ fn plot(
         .label("Landmarks")
         .legend(|(x, y)| Circle::new((x, y), 5, RED.filled()));
 
-    chart.draw_series(dataset.landmarks.iter().map(|(id, lm)| {
+    chart.draw_series(dataset.landmarks.values().map(|lm| {
         Text::new(
-            format!("{:?},{:?}", id, lm.subject_nb),
+            // format!("{:?},{:?}", id, lm.subject_nb),
+            format!("{:?}", lm.subject_nb),
             (lm.x + 0.05, lm.y),
             ("sans-serif", 15),
         )
@@ -72,15 +74,15 @@ fn plot(
         .label("Estimates")
         .legend(|(x, y)| Circle::new((x, y), 3, GREEN.filled()));
 
-    // States
+    // States Measurements
     chart
         .draw_series(
             states_measurement
                 .iter()
-                .map(|gs| Circle::new((gs.x[0], gs.x[1]), 1, PINK.filled())),
+                .map(|gs| Cross::new((gs.x[0], gs.x[1]), 1, PINK.filled())),
         )?
         .label("Estimates Measurements")
-        .legend(|(x, y)| Circle::new((x, y), 3, PINK.filled()));
+        .legend(|(x, y)| Cross::new((x, y), 3, PINK.filled()));
 
     // Legend
     chart
@@ -105,13 +107,13 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let measurement_model = Box::new(RangeBearingMeasurementModel {});
-    let motion_model = Box::new(Velocity {});
+    let noise = 1000000.0;
+    let motion_model = Box::new(Velocity::new(noise, noise, noise, noise));
     let mut q = Matrix2::<f64>::from_diagonal(&Vector2::new(350.0, 350.0));
     q = q * q;
     let r = Matrix3::identity(); //Observation x,y position covariance
 
-    let gt_state = dataset.groundtruth.first().unwrap();
-
+    let gt_state = &dataset.groundtruth[0];
     let mut state = GaussianStateStatic {
         x: Vector3::new(gt_state.x, gt_state.y, gt_state.orientation),
         P: Matrix3::<f64>::from_diagonal(&Vector3::new(1e-10, 1e-10, 1e-10)),
@@ -127,11 +129,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         landmarks,
         measurement_model,
         motion_model,
+        false,
     );
-    for (measurements, odometry) in (&dataset).into_iter().take(5000) {
-        let (time_now, measurement_update) = if let Some(m) = measurements.clone() {
+    for (measurements, odometry) in (&dataset).into_iter().take(10000) {
+        let (time_now, measurement_update) = if let Some(m) = &measurements {
             (m.first().unwrap().time, true)
-        } else if let Some(od) = odometry.cloned() {
+        } else if let Some(od) = &odometry {
             (od.time, false)
         } else {
             panic!("NOOOOOOOOO")
@@ -156,7 +159,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     println!("measurement updates = {}", states_measurement.len());
 
-    plot(&dataset, &states, &states_measurement)?;
+    plot(&dataset, &states, &states_measurement, time_past)?;
 
     Ok(())
 }

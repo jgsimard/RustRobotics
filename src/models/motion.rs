@@ -1,6 +1,7 @@
 // use enum_dispatch::enum_dispatch;
 use nalgebra::{
-    Matrix3, Matrix3x2, Matrix4, Matrix4x2, RealField, SMatrix, SVector, Vector2, Vector3, Vector4,
+    Matrix2, Matrix3, Matrix3x2, Matrix4, Matrix4x2, RealField, SMatrix, SVector, Vector2, Vector3,
+    Vector4,
 };
 
 // #[enum_dispatch(MM<T, S, Z, U>)]
@@ -8,9 +9,21 @@ pub trait MotionModel<T: RealField, const S: usize, const Z: usize, const U: usi
     fn prediction(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SVector<T, S>;
     fn jacobian_wrt_state(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SMatrix<T, S, S>;
     fn jacobian_wrt_input(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SMatrix<T, S, U>;
+    fn cov_noise_control_space(&self, u: &SVector<T, U>) -> SMatrix<T, U, U>;
 }
 
-pub struct Velocity {}
+pub struct Velocity {
+    a1: f64,
+    a2: f64,
+    a3: f64,
+    a4: f64,
+}
+
+impl Velocity {
+    pub fn new(a1: f64, a2: f64, a3: f64, a4: f64) -> Velocity {
+        Velocity { a1, a2, a3, a4 }
+    }
+}
 
 impl MotionModel<f64, 3, 2, 2> for Velocity {
     fn prediction(&self, x: &Vector3<f64>, u: &Vector2<f64>, dt: f64) -> Vector3<f64> {
@@ -27,13 +40,9 @@ impl MotionModel<f64, 3, 2, 2> for Velocity {
             )
         } else {
             // no rotation
-            Vector3::new(v * theta.cos() * dt, v * theta.sin() * dt, 0.0)
+            Vector3::new(v * theta.cos() * dt, v * theta.sin() * dt, w * dt)
         };
-        // let delta = Vector3::new(
-        //     v * theta.cos() * dt,
-        //     v * theta.sin() * dt,
-        //     w * dt,
-        // );
+
         let mut out = x + delta;
 
         // Limit theta within [-pi, pi]
@@ -72,7 +81,6 @@ impl MotionModel<f64, 3, 2, 2> for Velocity {
         }
     }
 
-    #[allow(clippy::deprecated_cfg_attr)]
     fn jacobian_wrt_input(&self, x: &Vector3<f64>, u: &Vector2<f64>, dt: f64) -> Matrix3x2<f64> {
         //state
         let theta = x[2];
@@ -80,16 +88,37 @@ impl MotionModel<f64, 3, 2, 2> for Velocity {
         let v = u[0];
         let w = x[1];
 
-        let sint = theta.sin();
-        let cost = theta.cos();
-        let sintdt = (theta + w * dt).sin();
-        let costdt = (theta + w * dt).cos();
-        let w2 = w * w;
+        if w != 0.0 {
+            let sint = theta.sin();
+            let cost = theta.cos();
+            let sintdt = (theta + w * dt).sin();
+            let costdt = (theta + w * dt).cos();
+            let w2 = w * w;
+            #[allow(clippy::deprecated_cfg_attr)]
+            #[cfg_attr(rustfmt, rustfmt_skip)]
+            Matrix3x2::<f64>::new(
+                (-sint + sintdt) / w, v  * ((sint - sintdt) / w2 + costdt * dt / w),
+                (cost - costdt) / w, v  * (-(cost - costdt) / w2 + sintdt * dt / w),
+                0., dt
+            )
+        } else {
+            #[allow(clippy::deprecated_cfg_attr)]
+            #[cfg_attr(rustfmt, rustfmt_skip)]
+            Matrix3x2::<f64>::new(
+                theta.cos() * dt, 0.,
+                theta.sin() * dt, 0.,
+                0., dt
+            )
+        }
+    }
+    fn cov_noise_control_space(&self, u: &Vector2<f64>) -> Matrix2<f64> {
+        let v2 = u[0].powi(2);
+        let w2 = u[1].powi(2);
+        #[allow(clippy::deprecated_cfg_attr)]
         #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix3x2::<f64>::new(
-            (-sint + sintdt) / w, v  * ((sint - sintdt) / w2 + costdt * dt / w),
-            (cost - costdt) / w, v  * (-(cost - costdt) / w2 + sintdt * dt / w),
-            0., 1.
+        Matrix2::<f64>::new(
+            self.a1 * v2 + self.a2 * w2, 0.0,
+            0.0, self.a3 * v2 + self.a4 * w2,
         )
     }
 }
@@ -142,44 +171,7 @@ impl MotionModel<f64, 4, 2, 2> for SimpleProblemMotionModel {
     fn jacobian_wrt_input(&self, _x: &Vector4<f64>, _u: &Vector2<f64>, _dt: f64) -> Matrix4x2<f64> {
         unimplemented!()
     }
+    fn cov_noise_control_space(&self, _u: &SVector<f64, 2>) -> SMatrix<f64, 2, 2> {
+        unimplemented!()
+    }
 }
-
-// impl<T: RealField, const S: usize, const Z: usize, const U: usize> MotionModel<T, S, Z, U> for Vec<T> {
-//     fn jacobian_wrt_input(&self,x: &SVector<T,S>,u: &SVector<T,U>,dt:T) -> SMatrix<T,S,U> {
-//         unimplemented!()
-//     }
-//     fn jacobian_wrt_state(&self,x: &SVector<T,S>,u: &SVector<T,U>,dt:T) -> SMatrix<T,S,S> {
-//         unimplemented!()
-//     }
-//     fn prediction(&self,x: &SVector<T,S>,u: &SVector<T,U>,dt:T) -> SVector<T,S> {
-//         unimplemented!()
-//     }
-// }
-
-// // I am unable to make enum_dispatch work. need help
-// #[enum_dispatch]
-// pub enum MM<T: RealField, const S: usize, const Z: usize, const U: usize> {
-//     Velocity(Velocity),
-//     SimpleProblemMotionModel(SimpleProblemMotionModel),
-// }
-
-// impl <T: RealField, const S: usize, const Z: usize, const U: usize> MotionModel<T, S, Z, U> for MM<T, S, Z, U> {
-//     fn prediction(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SVector<T, S> {
-//         match self {
-//             MM::SimpleProblemMotionModel(mm) => mm.prediction(x, u, dt),
-//             MM::Velocity(mm) => mm.prediction(x, u, dt)
-//         }
-//     }
-//     fn jacobian_wrt_input(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SMatrix<T, S, U> {
-//         match self {
-//             MM::SimpleProblemMotionModel(mm) => mm.jacobian_wrt_input(x, u, dt),
-//             MM::Velocity(mm) => mm.jacobian_wrt_input(x, u, dt)
-//         }
-//     }
-//     fn jacobian_wrt_state(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SMatrix<T, S, S> {
-//         match self {
-//             MM::SimpleProblemMotionModel(mm) => mm.jacobian_wrt_state(x, u, dt),
-//             MM::Velocity(mm) => mm.jacobian_wrt_state(x, u, dt)
-//         }
-//     }
-// // }

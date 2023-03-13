@@ -70,6 +70,7 @@ pub struct ExtendedKalmanFilterKnownCorrespondences<
     landmarks: FxHashMap<u32, SVector<T, S>>,
     measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
     motion_model: Box<dyn MotionModel<T, S, Z, U>>,
+    fixed_noise: bool,
 }
 
 impl<T: RealField, const S: usize, const Z: usize, const U: usize>
@@ -81,6 +82,7 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
         landmarks: FxHashMap<u32, SVector<T, S>>,
         measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
         motion_model: Box<dyn MotionModel<T, S, Z, U>>,
+        fixed_noise: bool,
     ) -> ExtendedKalmanFilterKnownCorrespondences<T, S, Z, U> {
         ExtendedKalmanFilterKnownCorrespondences {
             Q,
@@ -88,6 +90,7 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
             landmarks,
             measurement_model,
             motion_model,
+            fixed_noise,
         }
     }
 
@@ -105,13 +108,15 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
                 .jacobian_wrt_state(&estimate.x, &u_, dt.clone());
 
             // fixed version
-            let x_est = self.motion_model.prediction(&estimate.x, &u_, dt);
-            let p_est = &G * &estimate.P * G.transpose() + &self.R;
+            let x_est = self.motion_model.prediction(&estimate.x, &u_, dt.clone());
+            let p_est = if self.fixed_noise {
+                &G * &estimate.P * G.transpose() + &self.R
+            } else {
+                let V = self.motion_model.jacobian_wrt_input(&estimate.x, &u_, dt);
+                let M = self.motion_model.cov_noise_control_space(&u_);
+                &G * &estimate.P * G.transpose() + &V * M * V.transpose()
+            };
 
-            // version with adjustable R
-            // let V = model.jacobian_motion_model_wrt_input(&estimate.x, u, dt.clone());
-            // let M = model.cov_control_model(u, dt.clone());
-            // let mut p_est = &G * &estimate.P * G.transpose() + &V * M * V.transpose();
             (x_est, p_est)
         } else {
             (estimate.x.clone(), estimate.P.clone())
