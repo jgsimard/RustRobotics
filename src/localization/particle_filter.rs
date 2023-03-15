@@ -77,33 +77,53 @@ where
                     weights[i] *= pdf;
                 }
             }
-            //  pdf
-            let norm: T = weights.iter().fold(T::zero(), |a, b| a + *b);
-            let pdf = if norm != T::zero() {
-                weights.map(|pdf| pdf / norm)
-            } else {
-                [T::one() / T::from_usize(NP).unwrap(); NP]
-            };
-
-            //cdf
-            let mut total_prob = T::zero();
-            let cdf: [T; NP] = core::array::from_fn(|i| {
-                total_prob += (&pdf)[i];
-                total_prob
-            });
-
-            // sampling
-            let mut rng = rand::thread_rng();
-            self.particules = core::array::from_fn(|_| {
-                let rng_nb = rng.gen();
-                for i in 0..NP {
-                    if (&cdf)[i] > rng_nb {
-                        return self.particules[i];
-                    }
-                }
-                unreachable!()
-            });
+            self.resampling(weights);
+            // self.resampling_sort(weights);
         }
+    }
+
+    fn resampling(&mut self, weights: [T; NP]) {
+        let mut weight_tot = T::zero();
+        let cum_weight: [T; NP] = core::array::from_fn(|i| {
+            weight_tot += (&weights)[i];
+            weight_tot
+        });
+
+        // sampling
+        let mut rng = rand::thread_rng();
+        self.particules = core::array::from_fn(|_| {
+            let rng_nb = rng.gen() * weight_tot;
+            for i in 0..NP {
+                if (&cum_weight)[i] > rng_nb {
+                    return self.particules[i];
+                }
+            }
+            unreachable!()
+        });
+    }
+
+    #[allow(dead_code)]
+    fn resampling_sort(&mut self, weights: [T; NP]) {
+        let total_weight: T = weights.iter().fold(T::zero(), |a, b| a + *b);
+        let mut rng = rand::thread_rng();
+        let mut draws: Vec<T> = (0..NP).map(|_| rng.gen() * total_weight).collect();
+        draws.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+        let mut index = 0;
+        let mut cum_weight = draws[0];
+        let new_particules = core::array::from_fn(|i| {
+            while cum_weight < draws[i] {
+                if index == NP - 1 {
+                    // weird precision edge case
+                    cum_weight = total_weight;
+                    break;
+                } else {
+                    cum_weight += weights[index];
+                    index += 1;
+                }
+            }
+            self.particules[index]
+        });
+        self.particules = new_particules;
     }
 
     pub fn gaussian_estimate(&self) -> GaussianStateStatic<T, S> {
