@@ -3,6 +3,7 @@ use nalgebra::{
     Matrix2, Matrix3, Matrix3x2, Matrix4, Matrix4x2, RealField, SMatrix, SVector, Vector2, Vector3,
     Vector4,
 };
+use rand_distr::{Distribution, Normal};
 
 // #[enum_dispatch(MM<T, S, Z, U>)]
 pub trait MotionModel<T: RealField, const S: usize, const Z: usize, const U: usize> {
@@ -10,6 +11,7 @@ pub trait MotionModel<T: RealField, const S: usize, const Z: usize, const U: usi
     fn jacobian_wrt_state(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SMatrix<T, S, S>;
     fn jacobian_wrt_input(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SMatrix<T, S, U>;
     fn cov_noise_control_space(&self, u: &SVector<T, U>) -> SMatrix<T, U, U>;
+    fn sample(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SVector<T, S>;
 }
 
 pub struct Velocity {
@@ -17,11 +19,20 @@ pub struct Velocity {
     a2: f64,
     a3: f64,
     a4: f64,
+    a5: f64,
+    a6: f64,
 }
 
 impl Velocity {
-    pub fn new(a1: f64, a2: f64, a3: f64, a4: f64) -> Velocity {
-        Velocity { a1, a2, a3, a4 }
+    pub fn new(a1: f64, a2: f64, a3: f64, a4: f64, a5: f64, a6: f64) -> Velocity {
+        Velocity {
+            a1,
+            a2,
+            a3,
+            a4,
+            a5,
+            a6,
+        }
     }
 }
 
@@ -122,6 +133,47 @@ impl MotionModel<f64, 3, 2, 2> for Velocity {
             0.0, self.a3 * v2 + self.a4 * w2 + eps,
         )
     }
+
+    fn sample(&self, x: &SVector<f64, 3>, u: &SVector<f64, 2>, dt: f64) -> SVector<f64, 3> {
+        //state
+        let theta = x[2];
+        //control
+        let v = u[0];
+        let w = u[1];
+
+        let v2 = v.powi(2);
+        let w2 = w.powi(2);
+        let eps = 0.00001;
+        let mut rng = rand::thread_rng();
+        let v_noisy = Normal::new(v, (self.a1 * v2 + self.a2 * w2 + eps).sqrt())
+            .unwrap()
+            .sample(&mut rng);
+        let w_noisy = Normal::new(w, (self.a3 * v2 + self.a4 * w2 + eps).sqrt())
+            .unwrap()
+            .sample(&mut rng);
+        let gamma_noisy = Normal::new(0.0, (self.a5 * v2 + self.a6 * w2).sqrt())
+            .unwrap()
+            .sample(&mut rng);
+
+        let delta = Vector3::new(
+            v_noisy / w_noisy * (-theta.sin() + (theta + w_noisy * dt).sin()),
+            v_noisy / w_noisy * (theta.cos() - (theta + w_noisy * dt).cos()),
+            w_noisy * dt + gamma_noisy * dt,
+        );
+
+        let mut out = x + delta;
+
+        // Limit theta within [-pi, pi]
+        let mut theta_out = out[2];
+        if theta_out > std::f64::consts::PI {
+            theta_out -= 2.0 * std::f64::consts::PI;
+        } else if theta_out < -std::f64::consts::PI {
+            theta_out += 2.0 * std::f64::consts::PI;
+        }
+        out[2] = theta_out;
+
+        out
+    }
 }
 
 /// motion model
@@ -173,6 +225,9 @@ impl MotionModel<f64, 4, 2, 2> for SimpleProblemMotionModel {
         unimplemented!()
     }
     fn cov_noise_control_space(&self, _u: &SVector<f64, 2>) -> SMatrix<f64, 2, 2> {
+        unimplemented!()
+    }
+    fn sample(&self, _x: &SVector<f64, 4>, _u: &SVector<f64, 2>, _dt: f64) -> SVector<f64, 4> {
         unimplemented!()
     }
 }

@@ -13,8 +13,8 @@ use robotics::utils::state::GaussianStateStatic;
 
 fn plot(
     dataset: &UtiasDataset,
-    states: &Vec<Vec<Vector3<f64>>>,
-    states_measurement: &Vec<Vec<Vector3<f64>>>,
+    states: &Vec<GaussianStateStatic<f64, 3>>,
+    states_measurement: &Vec<GaussianStateStatic<f64, 3>>,
     max_time: f64,
 ) -> Result<(), Box<dyn Error>> {
     let root = BitMapBackend::new("./img/pf_landmarks.png", (1024, 768)).into_drawing_area();
@@ -65,25 +65,21 @@ fn plot(
 
     // States
     chart
-        .draw_series(states.iter().map(|particules| {
-            let m = particules
+        .draw_series(
+            states
                 .iter()
-                .fold(Vector3::<f64>::zeros(), |a, b| a + b)
-                / particules.len() as f64;
-            Circle::new((m[0], m[1]), 1, GREEN.filled())
-        }))?
+                .map(|gs| Circle::new((gs.x[0], gs.x[1]), 1, GREEN.filled())),
+        )?
         .label("Estimates")
         .legend(|(x, y)| Circle::new((x, y), 3, GREEN.filled()));
 
     // States Measurements
     chart
-        .draw_series(states_measurement.iter().map(|particules| {
-            let m = particules
+        .draw_series(
+            states_measurement
                 .iter()
-                .fold(Vector3::<f64>::zeros(), |a, b| a + b)
-                / particules.len() as f64;
-            Circle::new((m[0], m[1]), 1, RED.filled())
-        }))?
+                .map(|gs| Circle::new((gs.x[0], gs.x[1]), 1, RED.filled())),
+        )?
         .label("Estimates Measurements")
         .legend(|(x, y)| Cross::new((x, y), 3, RED.filled()));
 
@@ -109,18 +105,24 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
     let measurement_model = Box::new(RangeBearingMeasurementModel {});
     let noise = 1.0;
-    let motion_model = Box::new(Velocity::new(noise, noise, noise, noise));
+    let noise_w = 30.0;
+    let noise_g = 10.0;
+    // let motion_model = Box::new(Velocity4::new(noise, noise, noise_w, noise_w));
+    let motion_model = Box::new(Velocity::new(
+        noise, noise, noise_w, noise_w, noise_g, noise_g,
+    ));
     let q = Matrix2::<f64>::from_diagonal(&Vector2::new(0.1, 0.2));
     //Observation x,y position covariance
     let r = Matrix3::<f64>::from_diagonal(&Vector3::new(0.2, 0.2, 0.2));
 
-    let gt_state = &dataset.groundtruth[0];
+    let skip = 0;
+    let gt_state = &dataset.groundtruth[skip];
     let state = GaussianStateStatic {
         x: Vector3::new(gt_state.x, gt_state.y, gt_state.orientation),
         P: Matrix3::<f64>::from_diagonal(&Vector3::new(1e-10, 1e-10, 1e-10)),
     };
 
-    let mut particle_filter = ParticleFilterKnownCorrespondences::<f64, 3, 2, 2, 200>::new(
+    let mut particle_filter = ParticleFilterKnownCorrespondences::<f64, 3, 2, 2, 300>::new(
         r,
         q,
         landmarks,
@@ -133,7 +135,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut states = Vec::new();
     let mut states_measurement = Vec::new();
 
-    for (measurements, odometry) in (&dataset).into_iter().take(10000) {
+    for (measurements, odometry) in (&dataset).into_iter().skip(skip).take(10000) {
         let (time_now, measurement_update) = if let Some(m) = &measurements {
             (m.first().unwrap().time, true)
         } else if let Some(od) = &odometry {
@@ -154,9 +156,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         particle_filter.estimate(odometry, measurements, dt);
 
-        states.push(particle_filter.particules.to_vec());
+        states.push(particle_filter.gaussian_estimate());
         if measurement_update {
-            states_measurement.push(particle_filter.particules.to_vec())
+            states_measurement.push(states.last().unwrap().clone())
         }
     }
     println!("measurement updates = {}", states_measurement.len());

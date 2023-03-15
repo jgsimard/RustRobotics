@@ -57,15 +57,8 @@ where
         dt: T,
     ) {
         if let Some(u) = control {
-            let motion_noise = self.motion_model.cov_noise_control_space(&u);
-            // println!("u = {u}, motion_noise={motion_noise}");
-            let mvn = MultiVariateNormal::new(&u, &motion_noise).unwrap();
-
-            self.particules = core::array::from_fn(|i| {
-                let noisy_u = mvn.sample();
-                self.motion_model
-                    .prediction(&self.particules[i], &noisy_u, dt)
-            });
+            self.particules =
+                core::array::from_fn(|i| self.motion_model.sample(&self.particules[i], &u, dt));
         }
 
         if let Some(measurements) = measurements {
@@ -111,5 +104,21 @@ where
                 unreachable!()
             });
         }
+    }
+
+    pub fn gaussian_estimate(&self) -> GaussianStateStatic<T, S> {
+        let x = self
+            .particules
+            .iter()
+            .fold(SVector::<T, S>::zeros(), |a, b| a + b)
+            / T::from_usize(NP).unwrap();
+        let cov = self
+            .particules
+            .iter()
+            .map(|p| p - x)
+            .map(|dx| dx * dx.transpose())
+            .fold(SMatrix::<T, S, S>::zeros(), |a, b| a + b)
+            / T::from_usize(NP).unwrap();
+        GaussianStateStatic { x, P: cov }
     }
 }
