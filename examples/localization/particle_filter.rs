@@ -1,24 +1,25 @@
 use nalgebra::{Matrix2, Matrix3, Vector2, Vector3};
 use plotters::prelude::*;
-use robotics::utils::state::GaussianStateStatic;
+
 use rustc_hash::FxHashMap;
 use std::error::Error;
 
 extern crate robotics;
 use robotics::data::UtiasDataset;
-use robotics::localization::extended_kalman_filter::ExtendedKalmanFilterKnownCorrespondences;
+use robotics::localization::particle_filter::ParticleFilterKnownCorrespondences;
 use robotics::models::measurement::RangeBearingMeasurementModel;
 use robotics::models::motion::Velocity;
+use robotics::utils::state::GaussianStateStatic;
 
 fn plot(
     dataset: &UtiasDataset,
-    states: &[GaussianStateStatic<f64, 3>],
-    states_measurement: &[GaussianStateStatic<f64, 3>],
+    states: &Vec<Vec<Vector3<f64>>>,
+    states_measurement: &Vec<Vec<Vector3<f64>>>,
     max_time: f64,
 ) -> Result<(), Box<dyn Error>> {
-    let root = BitMapBackend::new("./img/ekf_landmarks.png", (1024, 768)).into_drawing_area();
+    let root = BitMapBackend::new("./img/pf_landmarks.png", (1024, 768)).into_drawing_area();
     root.fill(&WHITE)?;
-    let name = "EKF landmarks";
+    let name = "Particle Filter (Monte Carlo) landmarks";
     let min_x = 0.0;
     let max_x = 5.0;
     let min_y = -6.0;
@@ -56,7 +57,6 @@ fn plot(
 
     chart.draw_series(dataset.landmarks.values().map(|lm| {
         Text::new(
-            // format!("{:?},{:?}", id, lm.subject_nb),
             format!("{:?}", lm.subject_nb),
             (lm.x + 0.05, lm.y),
             ("sans-serif", 15),
@@ -65,23 +65,27 @@ fn plot(
 
     // States
     chart
-        .draw_series(
-            states
+        .draw_series(states.iter().map(|particules| {
+            let m = particules
                 .iter()
-                .map(|gs| Circle::new((gs.x[0], gs.x[1]), 1, GREEN.filled())),
-        )?
+                .fold(Vector3::<f64>::zeros(), |a, b| a + b)
+                / particules.len() as f64;
+            Circle::new((m[0], m[1]), 1, GREEN.filled())
+        }))?
         .label("Estimates")
         .legend(|(x, y)| Circle::new((x, y), 3, GREEN.filled()));
 
     // States Measurements
     chart
-        .draw_series(
-            states_measurement
+        .draw_series(states_measurement.iter().map(|particules| {
+            let m = particules
                 .iter()
-                .map(|gs| Cross::new((gs.x[0], gs.x[1]), 1, RED.filled())),
-        )?
+                .fold(Vector3::<f64>::zeros(), |a, b| a + b)
+                / particules.len() as f64;
+            Circle::new((m[0], m[1]), 1, RED.filled())
+        }))?
         .label("Estimates Measurements")
-        .legend(|(x, y)| Cross::new((x, y), 1, RED.filled()));
+        .legend(|(x, y)| Cross::new((x, y), 3, RED.filled()));
 
     // Legend
     chart
@@ -99,37 +103,36 @@ fn plot(
 
 fn main() -> Result<(), Box<dyn Error>> {
     let dataset = UtiasDataset::new(0)?;
-
     let mut landmarks = FxHashMap::default();
     for (id, lm) in &dataset.landmarks {
         landmarks.insert(*id, Vector3::new(lm.x, lm.y, 0.0));
     }
-
     let measurement_model = Box::new(RangeBearingMeasurementModel {});
-    let noise = 1000000.0;
+    let noise = 1.0;
     let motion_model = Box::new(Velocity::new(noise, noise, noise, noise));
-    let mut q = Matrix2::<f64>::from_diagonal(&Vector2::new(350.0, 350.0));
-    q = q * q;
-    let r = Matrix3::identity(); //Observation x,y position covariance
+    let q = Matrix2::<f64>::from_diagonal(&Vector2::new(0.1, 0.2));
+    //Observation x,y position covariance
+    let r = Matrix3::<f64>::from_diagonal(&Vector3::new(0.2, 0.2, 0.2));
 
     let gt_state = &dataset.groundtruth[0];
-    let mut state = GaussianStateStatic {
+    let state = GaussianStateStatic {
         x: Vector3::new(gt_state.x, gt_state.y, gt_state.orientation),
         P: Matrix3::<f64>::from_diagonal(&Vector3::new(1e-10, 1e-10, 1e-10)),
     };
-    let mut time_past = gt_state.time;
 
-    let mut states = Vec::new();
-    let mut states_measurement = Vec::new();
-
-    let ekf = ExtendedKalmanFilterKnownCorrespondences::new(
+    let mut particle_filter = ParticleFilterKnownCorrespondences::<f64, 3, 2, 2, 50>::new(
         r,
         q,
         landmarks,
         measurement_model,
         motion_model,
-        false,
+        state,
     );
+    let mut time_past = gt_state.time;
+
+    let mut states = Vec::new();
+    let mut states_measurement = Vec::new();
+
     for (measurements, odometry) in (&dataset).into_iter().take(10000) {
         let (time_now, measurement_update) = if let Some(m) = &measurements {
             (m.first().unwrap().time, true)
@@ -149,11 +152,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let odometry = odometry.map(|od| Vector2::new(od.forward_velocity, od.angular_velocity));
 
-        state = ekf.estimate(&state, odometry, measurements, dt);
+        particle_filter.estimate(odometry, measurements, dt);
 
-        states.push(state);
+        states.push(particle_filter.particules.to_vec());
         if measurement_update {
-            states_measurement.push(state)
+            states_measurement.push(particle_filter.particules.to_vec())
         }
     }
     println!("measurement updates = {}", states_measurement.len());

@@ -11,24 +11,21 @@ repository = "https://github.com/jgsimard/RustRobotics"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nalgebra = "0.32"
+nalgebra = {version = "0.32", features=["rand-no-std"]}
 plotters = "0.3"
 csv = "1.2"
 serde = { version = "1.0", features = ["derive"] }
 rustc-hash = "1.1"
-# enum_dispatch = "0.3"
-# enum_delegate = "0.2"
-# fxhash = "0.2"
+rand = "0.8"
+rand_distr = "0.4"
+
 # not used at the moment
 # pyo3 = { version = "0.18", features = ["extension-module"] }
 # numpy = "0.18" # for python port
 
 [dev-dependencies]
-rand = "0.8"
-rand_distr = "0.4"
-# plotters = "0.3"
 criterion = "0.4"
-
+approx = "0.5"
 
 [lib]
 name = "robotics"
@@ -53,6 +50,10 @@ path = "examples/localization/unscented_kalman_filter.rs"
 [[example]]
 name = "ekf_lm"
 path = "examples/localization/extended_kalman_filter_landmarks.rs"
+
+[[example]]
+name = "pf_lm"
+path = "examples/localization/particle_filter.rs"
 
 
 [[bench]]

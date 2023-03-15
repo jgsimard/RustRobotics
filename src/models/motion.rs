@@ -114,11 +114,12 @@ impl MotionModel<f64, 3, 2, 2> for Velocity {
     fn cov_noise_control_space(&self, u: &Vector2<f64>) -> Matrix2<f64> {
         let v2 = u[0].powi(2);
         let w2 = u[1].powi(2);
+        let eps = 0.00001;
         #[allow(clippy::deprecated_cfg_attr)]
         #[cfg_attr(rustfmt, rustfmt_skip)]
         Matrix2::<f64>::new(
-            self.a1 * v2 + self.a2 * w2, 0.0,
-            0.0, self.a3 * v2 + self.a4 * w2,
+            self.a1 * v2 + self.a2 * w2 + eps, 0.0,
+            0.0, self.a3 * v2 + self.a4 * w2 + eps,
         )
     }
 }

@@ -42,9 +42,7 @@ pub struct Barcode {
     barcode_nb: u32,
 }
 
-// #[allow(dead_code)]
 pub struct UtiasDataset {
-    #[allow(dead_code)]
     pub groundtruth: Vec<Position>,
     pub landmarks: FxHashMap<u32, Landmark>,
     pub measurements: Vec<RangeBearing>,
@@ -166,7 +164,6 @@ impl<'a> Iterator for UtiasDatasetIteratorRef<'a> {
 }
 
 impl UtiasDataset {
-    #[allow(dead_code)]
     pub fn new(dataset: i32) -> Result<UtiasDataset, Box<dyn Error>> {
         let base = match dataset {
             0 => "dataset/dataset0",
