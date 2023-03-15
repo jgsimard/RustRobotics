@@ -1,5 +1,5 @@
 pub mod mvn;
-// pub mod plot;
+pub mod plot;
 pub mod state;
 
 pub fn deg2rad(x: f64) -> f64 {

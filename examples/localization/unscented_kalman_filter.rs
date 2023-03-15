@@ -6,15 +6,12 @@ use plotters::prelude::*;
 use rand_distr::{Distribution, Normal};
 use std::error::Error;
 
-#[path = "../plot.rs"]
-mod plot;
-use plot::{chart, History};
-
 extern crate robotics;
 use robotics::localization::unscented_kalman_filter::UnscentedKalmanFilter;
 use robotics::models::measurement::{MeasurementModel, SimpleProblemMeasurementModel};
 use robotics::models::motion::{MotionModel, SimpleProblemMotionModel};
 use robotics::utils::deg2rad;
+use robotics::utils::plot::{chart, History};
 use robotics::utils::state::GaussianStateStatic as GaussianState;
 
 /// State
