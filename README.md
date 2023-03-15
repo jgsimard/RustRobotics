@@ -9,6 +9,8 @@ This package is a rust implementation of robotics algorithms. So far, the main s
   - [Localization](#localization)
     - [Extended Kalman Filter](#extended-kalman-filter)
     - [Unscented Kalman Filter](#unscented-kalman-filter)
+    - [Extended Kalman Filter With Landmarks](#extended-kalman-filter-with-landmarks)
+    - [Particle Filter With Landmarks](#particle-filter-with-landmarks)
   - [Sources](#sources)
 
 <!-- * Unscented Kalman filter -->
@@ -59,6 +61,22 @@ cargo run --example ekf
 
 ```bash
 cargo run --example ukf
+```
+
+### Extended Kalman Filter With Landmarks
+
+[Algorithm](src/localization/extended_kalman_filter.rs), [Example](examples/localization/extended_kalman_filter_landmarks.rs)
+
+```bash
+cargo run --example ekf_lm
+```
+
+### Particle Filter With Landmarks
+
+[Algorithm](src/localization/particle_filter.rs), [Example](examples/localization/particle_filter.rs)
+
+```bash
+cargo run --example pf_lm
 ```
 
 ## Sources
