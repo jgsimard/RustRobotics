@@ -120,7 +120,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         P: Matrix3::<f64>::from_diagonal(&Vector3::new(1e-10, 1e-10, 1e-10)),
     };
 
-    let mut particle_filter = ParticleFilterKnownCorrespondences::<f64, 3, 2, 2, 50>::new(
+    let mut particle_filter = ParticleFilterKnownCorrespondences::<f64, 3, 2, 2, 200>::new(
         r,
         q,
         landmarks,
