@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 use crate::models::measurement::MeasurementModel;
 use crate::models::motion::MotionModel;
 use crate::utils::mvn::MultiVariateNormal;
-use crate::utils::state::GaussianStateStatic;
+use crate::utils::state::GaussianState;
 
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct ParticleFilterKnownCorrespondences<
@@ -36,7 +36,7 @@ where
         landmarks: FxHashMap<u32, SVector<T, S>>,
         measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
         motion_model: Box<dyn MotionModel<T, S, Z, U>>,
-        initial_state: GaussianStateStatic<T, S>,
+        initial_state: GaussianState<T, S>,
     ) -> ParticleFilterKnownCorrespondences<T, S, Z, U, NP> {
         let mvn = MultiVariateNormal::new(&initial_state.x, &initial_noise).unwrap();
         let particules = core::array::from_fn(|_| mvn.sample());
@@ -125,7 +125,7 @@ where
     //     self.particules = new_particules;
     // }
 
-    pub fn gaussian_estimate(&self) -> GaussianStateStatic<T, S> {
+    pub fn gaussian_estimate(&self) -> GaussianState<T, S> {
         let x = self
             .particules
             .iter()
@@ -138,6 +138,6 @@ where
             .map(|dx| dx * dx.transpose())
             .fold(SMatrix::<T, S, S>::zeros(), |a, b| a + b)
             / T::from_usize(NP).unwrap();
-        GaussianStateStatic { x, cov }
+        GaussianState { x, cov }
     }
 }

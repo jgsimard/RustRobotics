@@ -9,7 +9,7 @@ use robotics::localization::particle_filter::ParticleFilterKnownCorrespondences;
 use robotics::models::measurement::RangeBearingMeasurementModel;
 use robotics::models::motion::Velocity;
 use robotics::utils::plot::plot_landmarks;
-use robotics::utils::state::GaussianStateStatic;
+use robotics::utils::state::GaussianState;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let dataset = UtiasDataset::new(0)?;
@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let skip = 0;
     let gt_state = &dataset.groundtruth[skip];
-    let state = GaussianStateStatic {
+    let state = GaussianState {
         x: Vector3::new(gt_state.x, gt_state.y, gt_state.orientation),
         cov: Matrix3::<f64>::from_diagonal(&Vector3::new(1e-10, 1e-10, 1e-10)),
     };

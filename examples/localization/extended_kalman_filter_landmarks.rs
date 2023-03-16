@@ -1,5 +1,5 @@
 use nalgebra::{Matrix2, Matrix3, Vector2, Vector3};
-use robotics::utils::state::GaussianStateStatic;
+use robotics::utils::state::GaussianState;
 use rustc_hash::FxHashMap;
 use std::error::Error;
 
@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let r = Matrix3::identity(); //Observation x,y position covariance
 
     let gt_state = &dataset.groundtruth[0];
-    let mut state = GaussianStateStatic {
+    let mut state = GaussianState {
         x: Vector3::new(gt_state.x, gt_state.y, gt_state.orientation),
         cov: Matrix3::<f64>::from_diagonal(&Vector3::new(1e-10, 1e-10, 1e-10)),
     };

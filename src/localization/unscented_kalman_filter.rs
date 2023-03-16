@@ -2,7 +2,7 @@ use nalgebra::{RealField, SMatrix, SVector};
 
 use crate::models::measurement::MeasurementModel;
 use crate::models::motion::MotionModel;
-use crate::utils::state::GaussianStateStatic;
+use crate::utils::state::GaussianState;
 
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct UnscentedKalmanFilter<T: RealField, const S: usize, const Z: usize, const U: usize> {
@@ -56,7 +56,7 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
         (mw, cw, gamma)
     }
 
-    fn generate_sigma_points(&self, state: &GaussianStateStatic<T, S>) -> Vec<SVector<T, S>> {
+    fn generate_sigma_points(&self, state: &GaussianState<T, S>) -> Vec<SVector<T, S>> {
         // use cholesky to compute the matrix square root  // cholesky(A) = L * L^T
         let sigma = state.cov.cholesky().expect("unable to sqrt").l() * self.gamma;
         let mut sigma_points = vec![state.x; 2 * S + 1];
@@ -70,11 +70,11 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
 
     pub fn estimate(
         &self,
-        state: &GaussianStateStatic<T, S>,
+        state: &GaussianState<T, S>,
         u: &SVector<T, U>,
         z: &SVector<T, Z>,
         dt: T,
-    ) -> GaussianStateStatic<T, S> {
+    ) -> GaussianState<T, S> {
         // predict
         let sigma_points = self.generate_sigma_points(state);
         let sp_xpred: Vec<SVector<T, S>> = sigma_points
@@ -96,7 +96,7 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
             .sum::<SMatrix<T, S, S>>()
             + self.q;
 
-        let prediction = GaussianStateStatic {
+        let prediction = GaussianState {
             x: mean_xpred,
             cov: cov_xpred,
         };
@@ -131,7 +131,7 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
 
         let x_est = mean_xpred + kalman_gain * y;
         let cov_est = cov_xpred - kalman_gain * cov_z * kalman_gain.transpose();
-        GaussianStateStatic {
+        GaussianState {
             x: x_est,
             cov: cov_est,
         }
@@ -144,7 +144,7 @@ mod tests {
     use crate::models::measurement::SimpleProblemMeasurementModel;
     use crate::models::motion::SimpleProblemMotionModel;
     use crate::utils::deg2rad;
-    use crate::utils::state::GaussianStateStatic as GaussianState;
+    use crate::utils::state::GaussianState;
     use nalgebra::{Matrix4, Vector2, Vector4};
 
     #[test]

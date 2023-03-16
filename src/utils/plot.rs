@@ -4,7 +4,7 @@ use plotters::prelude::*;
 use std::error::Error;
 
 use crate::data::UtiasDataset;
-use crate::utils::state::GaussianStateStatic;
+use crate::utils::state::GaussianState;
 
 pub fn ellipse_series(xy: Vector2<f64>, cov_xy: Matrix2<f64>) -> Option<Vec<(f64, f64)>> {
     let eigen = cov_xy.symmetric_eigen();
@@ -44,7 +44,7 @@ pub struct History {
     pub x_dr: Vec<(f64, f64)>,
     pub x_est: Vec<(f64, f64)>,
     // pub gaussian_state: Vec<GaussianState<f64, Const<4>>>,
-    pub gaussian_state: Vec<GaussianStateStatic<f64, 4>>,
+    pub gaussian_state: Vec<GaussianState<f64, 4>>,
 }
 
 pub fn chart(
@@ -158,8 +158,8 @@ pub fn chart(
 
 pub fn plot_landmarks(
     dataset: &UtiasDataset,
-    states: &[GaussianStateStatic<f64, 3>],
-    states_measurement: &[GaussianStateStatic<f64, 3>],
+    states: &[GaussianState<f64, 3>],
+    states_measurement: &[GaussianState<f64, 3>],
     max_time: f64,
     filename: &str,
     name: &str,

@@ -7,7 +7,7 @@ use robotics::localization::unscented_kalman_filter::UnscentedKalmanFilter;
 use robotics::models::measurement::SimpleProblemMeasurementModel;
 use robotics::models::motion::SimpleProblemMotionModel;
 use robotics::utils::deg2rad;
-use robotics::utils::state::GaussianStateStatic as GaussianState;
+use robotics::utils::state::GaussianState;
 
 fn ekf(b: &mut Criterion) {
     // setup ekf

@@ -12,7 +12,7 @@ use robotics::models::measurement::{MeasurementModel, SimpleProblemMeasurementMo
 use robotics::models::motion::{MotionModel, SimpleProblemMotionModel};
 use robotics::utils::deg2rad;
 use robotics::utils::plot::{chart, History};
-use robotics::utils::state::GaussianStateStatic as GaussianState;
+use robotics::utils::state::GaussianState;
 
 /// State
 /// [x, y, yaw, v]

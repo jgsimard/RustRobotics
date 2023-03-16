@@ -3,7 +3,7 @@ use rustc_hash::FxHashMap;
 
 use crate::models::measurement::MeasurementModel;
 use crate::models::motion::MotionModel;
-use crate::utils::state::GaussianStateStatic;
+use crate::utils::state::GaussianState;
 
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct ExtendedKalmanFilter<T: RealField, const S: usize, const Z: usize, const U: usize> {
@@ -33,11 +33,11 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
     pub fn estimate(
         &self,
         // model: &impl ExtendedKalmanFilterModel<T, S, Z, U>,
-        estimate: &GaussianStateStatic<T, S>,
+        estimate: &GaussianState<T, S>,
         u: &SVector<T, U>,
         z: &SVector<T, Z>,
         dt: T,
-    ) -> GaussianStateStatic<T, S> {
+    ) -> GaussianState<T, S> {
         // predict
         let g = self
             .motion_model
@@ -53,7 +53,7 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
         let kalman_gain = &cov_pred * h.transpose() * s.try_inverse().unwrap();
         let x_est = &x_pred + &kalman_gain * (z - z_pred);
         let cov_est = (SMatrix::<T, S, S>::identity() - kalman_gain * h) * &cov_pred;
-        GaussianStateStatic {
+        GaussianState {
             x: x_est,
             cov: cov_est,
         }
@@ -98,11 +98,11 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
 
     pub fn estimate(
         &self,
-        estimate: &GaussianStateStatic<T, S>,
+        estimate: &GaussianState<T, S>,
         control: Option<SVector<T, U>>,
         measurements: Option<Vec<(u32, SVector<T, Z>)>>,
         dt: T,
-    ) -> GaussianStateStatic<T, S> {
+    ) -> GaussianState<T, S> {
         let mut x_out = estimate.x.clone();
         let mut cov_out = estimate.cov.clone();
         // predict
@@ -141,7 +141,7 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
             }
         }
 
-        GaussianStateStatic {
+        GaussianState {
             x: x_out,
             cov: cov_out,
         }
@@ -154,7 +154,7 @@ mod tests {
     use crate::models::measurement::SimpleProblemMeasurementModel;
     use crate::models::motion::SimpleProblemMotionModel;
     use crate::utils::deg2rad;
-    use crate::utils::state::GaussianStateStatic as GaussianState;
+    use crate::utils::state::GaussianState;
     use nalgebra::{Matrix4, Vector2, Vector4};
 
     #[test]
