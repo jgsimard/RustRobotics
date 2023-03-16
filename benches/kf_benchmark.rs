@@ -21,7 +21,7 @@ fn ekf(b: &mut Criterion) {
     let u: Vector2<f64> = Default::default();
     let kalman_state = GaussianState {
         x: Vector4::<f64>::new(0., 0., 0., 0.),
-        P: Matrix4::<f64>::identity(),
+        cov: Matrix4::<f64>::identity(),
     };
     let z: Vector2<f64> = Default::default();
 
@@ -48,7 +48,7 @@ fn ukf(b: &mut Criterion) {
     let u: Vector2<f64> = Default::default();
     let kalman_state = GaussianState {
         x: Vector4::<f64>::new(0., 0., 0., 0.),
-        P: Matrix4::<f64>::identity(),
+        cov: Matrix4::<f64>::identity(),
     };
     let z: Vector2<f64> = Default::default();
 

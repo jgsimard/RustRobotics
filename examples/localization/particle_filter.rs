@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let gt_state = &dataset.groundtruth[skip];
     let state = GaussianStateStatic {
         x: Vector3::new(gt_state.x, gt_state.y, gt_state.orientation),
-        P: Matrix3::<f64>::from_diagonal(&Vector3::new(1e-10, 1e-10, 1e-10)),
+        cov: Matrix3::<f64>::from_diagonal(&Vector3::new(1e-10, 1e-10, 1e-10)),
     };
 
     let mut particle_filter = ParticleFilterKnownCorrespondences::<f64, 3, 2, 2, 300>::new(

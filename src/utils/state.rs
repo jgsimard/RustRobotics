@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use nalgebra::allocator::Allocator;
 use nalgebra::{
     DMatrix, DVector, DefaultAllocator, Dim, OMatrix, OVector, RealField, SMatrix, SVector,
@@ -10,7 +8,7 @@ pub struct GaussianStateStatic<T: RealField, const D: usize> {
     /// State Vector
     pub x: SVector<T, D>,
     /// Covariance Matrix
-    pub P: SMatrix<T, D, D>,
+    pub cov: SMatrix<T, D, D>,
 }
 
 #[derive(Debug)]
@@ -18,7 +16,7 @@ pub struct GaussianStateDynamic<T: RealField> {
     /// State Vector
     pub x: DVector<T>,
     /// Covariance Matrix
-    pub P: DMatrix<T>,
+    pub cov: DMatrix<T>,
 }
 
 #[derive(Debug, Clone)]
@@ -30,5 +28,5 @@ where
     /// State Vector
     pub x: OVector<T, D>,
     /// Covariance Matrix
-    pub P: OMatrix<T, D, D>,
+    pub cov: OMatrix<T, D, D>,
 }

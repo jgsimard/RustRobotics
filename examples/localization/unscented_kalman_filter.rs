@@ -98,7 +98,7 @@ fn run() -> History {
     let mut x_true = Vector4::<f64>::new(0., 0., 0., 0.);
     let mut kalman_state = GaussianState {
         x: Vector4::<f64>::new(0., 0., 0., 0.),
-        P: Matrix4::<f64>::identity(),
+        cov: Matrix4::<f64>::identity(),
     };
     let mut z: Vector2<f64>;
 

@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let gt_state = &dataset.groundtruth[0];
     let mut state = GaussianStateStatic {
         x: Vector3::new(gt_state.x, gt_state.y, gt_state.orientation),
-        P: Matrix3::<f64>::from_diagonal(&Vector3::new(1e-10, 1e-10, 1e-10)),
+        cov: Matrix3::<f64>::from_diagonal(&Vector3::new(1e-10, 1e-10, 1e-10)),
     };
     let mut time_past = gt_state.time;
 

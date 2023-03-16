@@ -1,4 +1,3 @@
-#![allow(non_snake_case)]
 use nalgebra::{RealField, SMatrix, SVector};
 use rustc_hash::FxHashMap;
 
@@ -8,8 +7,8 @@ use crate::utils::state::GaussianStateStatic;
 
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct ExtendedKalmanFilter<T: RealField, const S: usize, const Z: usize, const U: usize> {
-    R: SMatrix<T, S, S>,
-    Q: SMatrix<T, Z, Z>,
+    r: SMatrix<T, S, S>,
+    q: SMatrix<T, Z, Z>,
     measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
     motion_model: Box<dyn MotionModel<T, S, Z, U>>,
 }
@@ -18,14 +17,14 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
     ExtendedKalmanFilter<T, S, Z, U>
 {
     pub fn new(
-        R: SMatrix<T, S, S>,
-        Q: SMatrix<T, Z, Z>,
+        r: SMatrix<T, S, S>,
+        q: SMatrix<T, Z, Z>,
         measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
         motion_model: Box<dyn MotionModel<T, S, Z, U>>,
     ) -> ExtendedKalmanFilter<T, S, Z, U> {
         ExtendedKalmanFilter {
-            R,
-            Q,
+            r,
+            q,
             measurement_model,
             motion_model,
         }
@@ -40,21 +39,24 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
         dt: T,
     ) -> GaussianStateStatic<T, S> {
         // predict
-        let G = self
+        let g = self
             .motion_model
             .jacobian_wrt_state(&estimate.x, u, dt.clone());
         let x_pred = self.motion_model.prediction(&estimate.x, u, dt);
-        let p_pred = &G * &estimate.P * G.transpose() + &self.R;
+        let cov_pred = &g * &estimate.cov * g.transpose() + &self.r;
 
         // update
-        let H = self.measurement_model.jacobian(&x_pred, None);
+        let h = self.measurement_model.jacobian(&x_pred, None);
         let z_pred = self.measurement_model.prediction(&x_pred, None);
 
-        let s = &H * &p_pred * H.transpose() + &self.Q;
-        let kalman_gain = &p_pred * H.transpose() * s.try_inverse().unwrap();
+        let s = &h * &cov_pred * h.transpose() + &self.q;
+        let kalman_gain = &cov_pred * h.transpose() * s.try_inverse().unwrap();
         let x_est = &x_pred + &kalman_gain * (z - z_pred);
-        let p_est = (SMatrix::<T, S, S>::identity() - kalman_gain * H) * &p_pred;
-        GaussianStateStatic { x: x_est, P: p_est }
+        let cov_est = (SMatrix::<T, S, S>::identity() - kalman_gain * h) * &cov_pred;
+        GaussianStateStatic {
+            x: x_est,
+            cov: cov_est,
+        }
     }
 }
 
@@ -65,8 +67,8 @@ pub struct ExtendedKalmanFilterKnownCorrespondences<
     const Z: usize,
     const U: usize,
 > {
-    R: SMatrix<T, S, S>,
-    Q: SMatrix<T, Z, Z>,
+    r: SMatrix<T, S, S>,
+    q: SMatrix<T, Z, Z>,
     landmarks: FxHashMap<u32, SVector<T, S>>,
     measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
     motion_model: Box<dyn MotionModel<T, S, Z, U>>,
@@ -77,16 +79,16 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
     ExtendedKalmanFilterKnownCorrespondences<T, S, Z, U>
 {
     pub fn new(
-        R: SMatrix<T, S, S>,
-        Q: SMatrix<T, Z, Z>,
+        r: SMatrix<T, S, S>,
+        q: SMatrix<T, Z, Z>,
         landmarks: FxHashMap<u32, SVector<T, S>>,
         measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
         motion_model: Box<dyn MotionModel<T, S, Z, U>>,
         fixed_noise: bool,
     ) -> ExtendedKalmanFilterKnownCorrespondences<T, S, Z, U> {
         ExtendedKalmanFilterKnownCorrespondences {
-            Q,
-            R,
+            q,
+            r,
             landmarks,
             measurement_model,
             motion_model,
@@ -102,25 +104,25 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
         dt: T,
     ) -> GaussianStateStatic<T, S> {
         let mut x_out = estimate.x.clone();
-        let mut p_out = estimate.P.clone();
+        let mut cov_out = estimate.cov.clone();
         // predict
         if let Some(u) = control {
-            let G = self
+            let g = self
                 .motion_model
                 .jacobian_wrt_state(&estimate.x, &u, dt.clone());
 
             let x_est = self.motion_model.prediction(&estimate.x, &u, dt.clone());
-            let p_est = if self.fixed_noise {
+            let cov_est = if self.fixed_noise {
                 // fixed version
-                &G * &estimate.P * G.transpose() + &self.R
+                &g * &estimate.cov * g.transpose() + &self.r
             } else {
                 // adaptive version
-                let V = self.motion_model.jacobian_wrt_input(&estimate.x, &u, dt);
-                let M = self.motion_model.cov_noise_control_space(&u);
-                &G * &estimate.P * G.transpose() + &V * M * V.transpose()
+                let v = self.motion_model.jacobian_wrt_input(&estimate.x, &u, dt);
+                let m = self.motion_model.cov_noise_control_space(&u);
+                &g * &estimate.cov * g.transpose() + &v * m * v.transpose()
             };
             x_out = x_est;
-            p_out = p_est;
+            cov_out = cov_est;
         }
 
         // update / correction step
@@ -131,15 +133,18 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
             {
                 let landmark = self.landmarks.get(id);
                 let z_pred = self.measurement_model.prediction(&x_out, landmark);
-                let H = self.measurement_model.jacobian(&x_out, landmark);
-                let s = &H * &p_out * H.transpose() + &self.Q;
-                let kalman_gain = &p_out * H.transpose() * s.try_inverse().unwrap();
+                let h = self.measurement_model.jacobian(&x_out, landmark);
+                let s = &h * &cov_out * h.transpose() + &self.q;
+                let kalman_gain = &cov_out * h.transpose() * s.try_inverse().unwrap();
                 x_out += &kalman_gain * (z - z_pred);
-                p_out = (SMatrix::<T, S, S>::identity() - kalman_gain * H) * &p_out
+                cov_out = (SMatrix::<T, S, S>::identity() - kalman_gain * h) * &cov_out
             }
         }
 
-        GaussianStateStatic { x: x_out, P: p_out }
+        GaussianStateStatic {
+            x: x_out,
+            cov: cov_out,
+        }
     }
 }
 
@@ -165,7 +170,7 @@ mod tests {
         let u: Vector2<f64> = Default::default();
         let kalman_state = GaussianState {
             x: Vector4::<f64>::new(0., 0., 0., 0.),
-            P: Matrix4::<f64>::identity(),
+            cov: Matrix4::<f64>::identity(),
         };
         let z: Vector2<f64> = Default::default();
 

@@ -6,8 +6,8 @@ use std::error::Error;
 use crate::data::UtiasDataset;
 use crate::utils::state::GaussianStateStatic;
 
-pub fn ellipse_series(xy: Vector2<f64>, p_xy: Matrix2<f64>) -> Option<Vec<(f64, f64)>> {
-    let eigen = p_xy.symmetric_eigen();
+pub fn ellipse_series(xy: Vector2<f64>, cov_xy: Matrix2<f64>) -> Option<Vec<(f64, f64)>> {
+    let eigen = cov_xy.symmetric_eigen();
     let eigenvectors = eigen.eigenvectors;
     let eigenvalues = eigen.eigenvalues;
 
@@ -136,15 +136,15 @@ pub fn chart(
 
     // Draw ellipse
     let state = history.gaussian_state.get(i).unwrap();
-    let p_xy = state.P.fixed_view::<2, 2>(0, 0).clone_owned();
+    let cov_xy = state.cov.fixed_view::<2, 2>(0, 0).clone_owned();
     let xy = state.x.fixed_view::<2, 1>(0, 0).clone_owned();
 
     chart.draw_series(std::iter::once(Polygon::new(
-        ellipse_series(xy, p_xy).unwrap(),
+        ellipse_series(xy, cov_xy).unwrap(),
         GREEN.mix(0.4),
     )))?;
     chart.draw_series(std::iter::once(PathElement::new(
-        ellipse_series(xy, p_xy).unwrap(),
+        ellipse_series(xy, cov_xy).unwrap(),
         GREEN,
     )))?;
 
@@ -243,7 +243,3 @@ pub fn plot_landmarks(
 
     Ok(())
 }
-
-// to make the compiler happy
-#[allow(dead_code)]
-fn main() {}

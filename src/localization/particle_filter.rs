@@ -102,29 +102,28 @@ where
         });
     }
 
-    #[allow(dead_code)]
-    fn resampling_sort(&mut self, weights: [T; NP]) {
-        let total_weight: T = weights.iter().fold(T::zero(), |a, b| a + *b);
-        let mut rng = rand::thread_rng();
-        let mut draws: Vec<T> = (0..NP).map(|_| rng.gen() * total_weight).collect();
-        draws.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-        let mut index = 0;
-        let mut cum_weight = draws[0];
-        let new_particules = core::array::from_fn(|i| {
-            while cum_weight < draws[i] {
-                if index == NP - 1 {
-                    // weird precision edge case
-                    cum_weight = total_weight;
-                    break;
-                } else {
-                    cum_weight += weights[index];
-                    index += 1;
-                }
-            }
-            self.particules[index]
-        });
-        self.particules = new_particules;
-    }
+    // fn resampling_sort(&mut self, weights: [T; NP]) {
+    //     let total_weight: T = weights.iter().fold(T::zero(), |a, b| a + *b);
+    //     let mut rng = rand::thread_rng();
+    //     let mut draws: Vec<T> = (0..NP).map(|_| rng.gen() * total_weight).collect();
+    //     draws.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+    //     let mut index = 0;
+    //     let mut cum_weight = draws[0];
+    //     let new_particules = core::array::from_fn(|i| {
+    //         while cum_weight < draws[i] {
+    //             if index == NP - 1 {
+    //                 // weird precision edge case
+    //                 cum_weight = total_weight;
+    //                 break;
+    //             } else {
+    //                 cum_weight += weights[index];
+    //                 index += 1;
+    //             }
+    //         }
+    //         self.particules[index]
+    //     });
+    //     self.particules = new_particules;
+    // }
 
     pub fn gaussian_estimate(&self) -> GaussianStateStatic<T, S> {
         let x = self
@@ -139,6 +138,6 @@ where
             .map(|dx| dx * dx.transpose())
             .fold(SMatrix::<T, S, S>::zeros(), |a, b| a + b)
             / T::from_usize(NP).unwrap();
-        GaussianStateStatic { x, P: cov }
+        GaussianStateStatic { x, cov }
     }
 }

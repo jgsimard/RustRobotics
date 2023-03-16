@@ -1,5 +1,3 @@
-#![allow(non_snake_case)]
-
 use nalgebra::{RealField, SMatrix, SVector};
 
 use crate::models::measurement::MeasurementModel;
@@ -8,8 +6,8 @@ use crate::utils::state::GaussianStateStatic;
 
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct UnscentedKalmanFilter<T: RealField, const S: usize, const Z: usize, const U: usize> {
-    Q: SMatrix<T, S, S>,
-    R: SMatrix<T, Z, Z>,
+    q: SMatrix<T, S, S>,
+    r: SMatrix<T, Z, Z>,
     gamma: T,
     observation_model: Box<dyn MeasurementModel<T, S, Z>>,
     motion_model: Box<dyn MotionModel<T, S, Z, U>>,
@@ -21,8 +19,8 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
     UnscentedKalmanFilter<T, S, Z, U>
 {
     pub fn new(
-        Q: SMatrix<T, S, S>,
-        R: SMatrix<T, Z, Z>,
+        q: SMatrix<T, S, S>,
+        r: SMatrix<T, Z, Z>,
         observation_model: Box<dyn MeasurementModel<T, S, Z>>,
         motion_model: Box<dyn MotionModel<T, S, Z, U>>,
         alpha: T,
@@ -32,8 +30,8 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
         let (mw, cw, gamma) =
             UnscentedKalmanFilter::<T, S, Z, U>::sigma_weights(alpha, beta, kappa);
         UnscentedKalmanFilter {
-            Q,
-            R,
+            q,
+            r,
             observation_model,
             motion_model,
             gamma,
@@ -60,7 +58,7 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
 
     fn generate_sigma_points(&self, state: &GaussianStateStatic<T, S>) -> Vec<SVector<T, S>> {
         // use cholesky to compute the matrix square root  // cholesky(A) = L * L^T
-        let sigma = state.P.cholesky().expect("unable to sqrt").l() * self.gamma;
+        let sigma = state.cov.cholesky().expect("unable to sqrt").l() * self.gamma;
         let mut sigma_points = vec![state.x; 2 * S + 1];
         for i in 0..S {
             let sigma_column = sigma.column(i);
@@ -96,11 +94,11 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
             .zip(self.cw.iter())
             .map(|(dx, cw)| dx * dx.transpose() * *cw)
             .sum::<SMatrix<T, S, S>>()
-            + self.Q;
+            + self.q;
 
         let prediction = GaussianStateStatic {
             x: mean_xpred,
-            P: cov_xpred,
+            cov: cov_xpred,
         };
 
         // update
@@ -118,7 +116,7 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
             .zip(self.cw.iter())
             .map(|(dx, cw)| dx * dx.transpose() * *cw)
             .sum::<SMatrix<T, Z, Z>>()
-            + self.R;
+            + self.r;
 
         let s = sp_xpred
             .iter()
@@ -132,8 +130,11 @@ impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize>
         let kalman_gain = s * cov_z.try_inverse().unwrap();
 
         let x_est = mean_xpred + kalman_gain * y;
-        let p_est = cov_xpred - kalman_gain * cov_z * kalman_gain.transpose();
-        GaussianStateStatic { x: x_est, P: p_est }
+        let cov_est = cov_xpred - kalman_gain * cov_z * kalman_gain.transpose();
+        GaussianStateStatic {
+            x: x_est,
+            cov: cov_est,
+        }
     }
 }
 
@@ -166,7 +167,7 @@ mod tests {
         let u: Vector2<f64> = Default::default();
         let kalman_state = GaussianState {
             x: Vector4::<f64>::new(0., 0., 0., 0.),
-            P: Matrix4::<f64>::identity(),
+            cov: Matrix4::<f64>::identity(),
         };
         let z: Vector2<f64> = Default::default();
 
