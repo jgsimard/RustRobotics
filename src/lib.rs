@@ -1,6 +1,3 @@
-#![allow(incomplete_features)]
-#![feature(generic_const_exprs)]
-
 pub mod data;
 pub mod localization;
 pub mod mapping;
