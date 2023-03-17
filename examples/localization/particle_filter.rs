@@ -4,7 +4,7 @@ use rustc_hash::FxHashMap;
 use std::error::Error;
 
 extern crate robotics;
-use robotics::data::UtiasDataset;
+use robotics::data::utias::UtiasDataset;
 use robotics::localization::particle_filter::ParticleFilterKnownCorrespondences;
 use robotics::models::measurement::RangeBearingMeasurementModel;
 use robotics::models::motion::Velocity;

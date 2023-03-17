@@ -3,7 +3,7 @@ use plotters::coord::Shift;
 use plotters::prelude::*;
 use std::error::Error;
 
-use crate::data::UtiasDataset;
+use crate::data::utias::UtiasDataset;
 use crate::utils::state::GaussianState;
 
 pub fn ellipse_series(xy: Vector2<f64>, cov_xy: Matrix2<f64>) -> Option<Vec<(f64, f64)>> {
