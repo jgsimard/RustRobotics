@@ -1,4 +1,6 @@
-use nalgebra::{RealField, SMatrix, SVector};
+use nalgebra::{
+    allocator::Allocator, Const, DefaultAllocator, Dim, DimName, OMatrix, OVector, RealField,
+};
 use rand::distributions::Distribution;
 
 #[derive(Debug, Clone)]
@@ -25,25 +27,29 @@ impl std::fmt::Display for Error {
     }
 }
 
-pub struct MultiVariateNormal<T: RealField, const D: usize> {
-    mean: SVector<T, D>,
-    precision: SMatrix<T, D, D>,
-    lower: SMatrix<T, D, D>,
+pub struct MultiVariateNormal<T: RealField, D: Dim + DimName>
+where
+    DefaultAllocator: Allocator<T, D> + Allocator<T, D, D>,
+{
+    mean: OVector<T, D>,
+    precision: OMatrix<T, D, D>,
+    lower: OMatrix<T, D, D>,
     factor: T,
 }
 
-impl<T: RealField, const D: usize> MultiVariateNormal<T, D>
+impl<T: RealField, D: Dim + DimName> MultiVariateNormal<T, D>
 where
     rand_distr::StandardNormal: Distribution<T>,
+    DefaultAllocator: Allocator<T, D> + Allocator<T, D, D> + Allocator<T, Const<1>, D>,
 {
     // {
-    pub fn new(mean: &SVector<T, D>, covariance: &SMatrix<T, D, D>) -> Result<Self, Error> {
+    pub fn new(mean: &OVector<T, D>, covariance: &OMatrix<T, D, D>) -> Result<Self, Error> {
         let Some(covariance_cholesky) = covariance.clone().cholesky() else {
             return Err(Error{error_type : ErrorType::CovarianceNotSemiDefinitePositive})
         };
         let det = covariance_cholesky.determinant();
         let precision = covariance_cholesky.inverse();
-        let factor = T::one() / (T::two_pi().powi(D as i32) * det).sqrt();
+        let factor = T::one() / (T::two_pi().powi(D::dim() as i32) * det).sqrt();
         let mvn = MultiVariateNormal {
             mean: mean.clone(),
             precision,
@@ -54,17 +60,17 @@ where
     }
 
     /// Probability density function
-    pub fn pdf(&self, x: &SVector<T, D>) -> T {
+    pub fn pdf(&self, x: &OVector<T, D>) -> T {
         let dx = &self.mean - x;
         let neg_half = T::from_f32(-0.5).unwrap();
-        let interior = (dx.transpose() * &self.precision * dx).x.clone();
+        let interior = (&dx.transpose() * &self.precision * dx).x.clone();
         T::exp(neg_half * interior) * self.factor.clone()
     }
 
-    pub fn sample(&self) -> SVector<T, D> {
+    pub fn sample(&self) -> OVector<T, D> {
         // https://juanitorduz.github.io/multivariate_normal/
         let mut rng = rand::thread_rng();
-        let u = SVector::<T, D>::from_distribution(&rand_distr::StandardNormal, &mut rng);
+        let u = OVector::<T, D>::from_distribution(&rand_distr::StandardNormal, &mut rng);
         &self.mean + &self.lower * u
     }
 }

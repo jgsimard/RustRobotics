@@ -1,17 +1,26 @@
 // use enum_dispatch::enum_dispatch;
 use nalgebra::{
-    Matrix2, Matrix3, Matrix3x2, Matrix4, Matrix4x2, RealField, SMatrix, SVector, Vector2, Vector3,
-    Vector4,
+    allocator::Allocator, Const, DefaultAllocator, Dim, Matrix2, Matrix3, Matrix3x2, Matrix4,
+    Matrix4x2, OMatrix, OVector, RealField, Vector2, Vector3, Vector4,
 };
+
 use rand_distr::{Distribution, Normal};
 
 // #[enum_dispatch(MM<T, S, Z, U>)]
-pub trait MotionModel<T: RealField, const S: usize, const Z: usize, const U: usize> {
-    fn prediction(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SVector<T, S>;
-    fn jacobian_wrt_state(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SMatrix<T, S, S>;
-    fn jacobian_wrt_input(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SMatrix<T, S, U>;
-    fn cov_noise_control_space(&self, u: &SVector<T, U>) -> SMatrix<T, U, U>;
-    fn sample(&self, x: &SVector<T, S>, u: &SVector<T, U>, dt: T) -> SVector<T, S>;
+pub trait MotionModel<T: RealField, S: Dim, Z: Dim, U: Dim>
+where
+    DefaultAllocator: Allocator<T, S>
+        + Allocator<T, U>
+        + Allocator<T, S, S>
+        + Allocator<T, U, U>
+        + Allocator<T, S, U>
+        + Allocator<T, Z, S>,
+{
+    fn prediction(&self, x: &OVector<T, S>, u: &OVector<T, U>, dt: T) -> OVector<T, S>;
+    fn jacobian_wrt_state(&self, x: &OVector<T, S>, u: &OVector<T, U>, dt: T) -> OMatrix<T, S, S>;
+    fn jacobian_wrt_input(&self, x: &OVector<T, S>, u: &OVector<T, U>, dt: T) -> OMatrix<T, S, U>;
+    fn cov_noise_control_space(&self, u: &OVector<T, U>) -> OMatrix<T, U, U>;
+    fn sample(&self, x: &OVector<T, S>, u: &OVector<T, U>, dt: T) -> OVector<T, S>;
 }
 
 pub struct Velocity {
@@ -36,7 +45,7 @@ impl Velocity {
     }
 }
 
-impl MotionModel<f64, 3, 2, 2> for Velocity {
+impl MotionModel<f64, Const<3>, Const<2>, Const<2>> for Velocity {
     fn prediction(&self, x: &Vector3<f64>, u: &Vector2<f64>, dt: f64) -> Vector3<f64> {
         //state
         let theta = x[2];
@@ -134,7 +143,7 @@ impl MotionModel<f64, 3, 2, 2> for Velocity {
         )
     }
 
-    fn sample(&self, x: &SVector<f64, 3>, u: &SVector<f64, 2>, dt: f64) -> SVector<f64, 3> {
+    fn sample(&self, x: &Vector3<f64>, u: &Vector2<f64>, dt: f64) -> Vector3<f64> {
         //state
         let theta = x[2];
         //control
@@ -197,7 +206,7 @@ impl MotionModel<f64, 3, 2, 2> for Velocity {
 /// dy/dv = dt * sin(yaw)
 pub struct SimpleProblemMotionModel {}
 
-impl MotionModel<f64, 4, 2, 2> for SimpleProblemMotionModel {
+impl MotionModel<f64, Const<4>, Const<2>, Const<2>> for SimpleProblemMotionModel {
     fn prediction(&self, x: &Vector4<f64>, u: &Vector2<f64>, dt: f64) -> Vector4<f64> {
         let yaw = x[2];
         let v = x[3];
@@ -224,10 +233,10 @@ impl MotionModel<f64, 4, 2, 2> for SimpleProblemMotionModel {
     fn jacobian_wrt_input(&self, _x: &Vector4<f64>, _u: &Vector2<f64>, _dt: f64) -> Matrix4x2<f64> {
         unimplemented!()
     }
-    fn cov_noise_control_space(&self, _u: &SVector<f64, 2>) -> SMatrix<f64, 2, 2> {
+    fn cov_noise_control_space(&self, _u: &Vector2<f64>) -> Matrix2<f64> {
         unimplemented!()
     }
-    fn sample(&self, _x: &SVector<f64, 4>, _u: &SVector<f64, 2>, _dt: f64) -> SVector<f64, 4> {
+    fn sample(&self, _x: &Vector4<f64>, _u: &Vector2<f64>, _dt: f64) -> Vector4<f64> {
         unimplemented!()
     }
 }

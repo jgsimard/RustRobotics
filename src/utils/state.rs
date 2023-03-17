@@ -1,9 +1,12 @@
-use nalgebra::{RealField, SMatrix, SVector};
+use nalgebra::{allocator::Allocator, DefaultAllocator, Dim, OMatrix, OVector, RealField};
 
-#[derive(Debug, Clone, Copy)]
-pub struct GaussianState<T: RealField, const D: usize> {
+#[derive(Debug, Clone)]
+pub struct GaussianState<T: RealField, D: Dim>
+where
+    DefaultAllocator: Allocator<T, D> + Allocator<T, D, D>,
+{
     /// State Vector
-    pub x: SVector<T, D>,
+    pub x: OVector<T, D>,
     /// Covariance Matrix
-    pub cov: SMatrix<T, D, D>,
+    pub cov: OMatrix<T, D, D>,
 }

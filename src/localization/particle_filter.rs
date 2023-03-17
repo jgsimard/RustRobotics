@@ -1,4 +1,5 @@
-use nalgebra::{RealField, SMatrix, SVector};
+use nalgebra::DimName;
+use nalgebra::{allocator::Allocator, Const, DefaultAllocator, Dim, OMatrix, OVector, RealField};
 use rand::distributions::Distribution;
 use rand::Rng;
 use rand_distr::{Standard, StandardNormal};
@@ -12,34 +13,61 @@ use crate::utils::state::GaussianState;
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct ParticleFilterKnownCorrespondences<
     T: RealField,
-    const S: usize,
-    const Z: usize,
-    const U: usize,
-    const NP: usize,
-> {
-    q: SMatrix<T, Z, Z>,
-    landmarks: FxHashMap<u32, SVector<T, S>>,
+    S: Dim + DimName,
+    Z: Dim + DimName,
+    U: Dim,
+> where
+    DefaultAllocator: Allocator<T, S>
+        + Allocator<T, U>
+        + Allocator<T, Z>
+        + Allocator<T, S, S>
+        + Allocator<T, Z, Z>
+        + Allocator<T, Z, S>
+        + Allocator<T, S, U>
+        + Allocator<T, U, U>
+        + Allocator<T, S, Z>
+        + Allocator<T, Const<1>, S>
+        + Allocator<T, Const<1>, Z>,
+{
+    q: OMatrix<T, Z, Z>,
+    landmarks: FxHashMap<u32, OVector<T, S>>,
     measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
     motion_model: Box<dyn MotionModel<T, S, Z, U>>,
-    pub particules: [SVector<T, S>; NP],
+    pub particules: Vec<OVector<T, S>>,
+    num_particules: usize,
 }
 
-impl<T: RealField + Copy, const S: usize, const Z: usize, const U: usize, const NP: usize>
-    ParticleFilterKnownCorrespondences<T, S, Z, U, NP>
+impl<T: RealField + Copy, S: Dim + DimName, Z: Dim + DimName, U: Dim>
+    ParticleFilterKnownCorrespondences<T, S, Z, U>
 where
     StandardNormal: Distribution<T>,
     Standard: Distribution<T>,
+    DefaultAllocator: Allocator<T, S>
+        + Allocator<T, U>
+        + Allocator<T, Z>
+        + Allocator<T, S, S>
+        + Allocator<T, Z, Z>
+        + Allocator<T, Z, S>
+        + Allocator<T, S, U>
+        + Allocator<T, U, U>
+        + Allocator<T, S, Z>
+        + Allocator<T, Const<1>, S>
+        + Allocator<T, Const<1>, Z>,
 {
     pub fn new(
-        initial_noise: SMatrix<T, S, S>,
-        q: SMatrix<T, Z, Z>,
-        landmarks: FxHashMap<u32, SVector<T, S>>,
+        initial_noise: OMatrix<T, S, S>,
+        q: OMatrix<T, Z, Z>,
+        landmarks: FxHashMap<u32, OVector<T, S>>,
         measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
         motion_model: Box<dyn MotionModel<T, S, Z, U>>,
         initial_state: GaussianState<T, S>,
-    ) -> ParticleFilterKnownCorrespondences<T, S, Z, U, NP> {
+        num_particules: usize,
+    ) -> ParticleFilterKnownCorrespondences<T, S, Z, U> {
         let mvn = MultiVariateNormal::new(&initial_state.x, &initial_noise).unwrap();
-        let particules = core::array::from_fn(|_| mvn.sample());
+        let mut particules = Vec::with_capacity(num_particules);
+        for _ in 0..num_particules {
+            particules.push(mvn.sample());
+        }
 
         ParticleFilterKnownCorrespondences {
             q,
@@ -47,23 +75,27 @@ where
             measurement_model,
             motion_model,
             particules,
+            num_particules,
         }
     }
 
     pub fn estimate(
         &mut self,
-        control: Option<SVector<T, U>>,
-        measurements: Option<Vec<(u32, SVector<T, Z>)>>,
+        control: Option<OVector<T, U>>,
+        measurements: Option<Vec<(u32, OVector<T, Z>)>>,
         dt: T,
     ) {
         if let Some(u) = control {
-            self.particules =
-                core::array::from_fn(|i| self.motion_model.sample(&self.particules[i], &u, dt));
+            self.particules = self
+                .particules
+                .iter()
+                .map(|p| self.motion_model.sample(p, &u, dt))
+                .collect();
         }
 
         if let Some(measurements) = measurements {
-            let mut weights = [T::one(); NP];
-            let mvn = MultiVariateNormal::new(&SVector::<T, Z>::zeros(), &self.q).unwrap();
+            let mut weights = vec![T::one(); self.num_particules];
+            let mvn = MultiVariateNormal::new(&OVector::<T, Z>::zeros(), &self.q).unwrap();
 
             for (id, z) in measurements
                 .iter()
@@ -77,29 +109,33 @@ where
                     weights[i] *= pdf;
                 }
             }
-            self.resampling(weights);
+            self.resampling(&weights);
             // self.resampling_sort(weights);
         }
     }
 
-    fn resampling(&mut self, weights: [T; NP]) {
+    fn resampling(&mut self, weights: &[T]) {
         let mut weight_tot = T::zero();
-        let cum_weight: [T; NP] = core::array::from_fn(|i| {
-            weight_tot += (&weights)[i];
-            weight_tot
-        });
+        let cum_weight: Vec<T> = (0..self.num_particules)
+            .map(|i| {
+                weight_tot += weights[i];
+                weight_tot
+            })
+            .collect();
 
         // sampling
         let mut rng = rand::thread_rng();
-        self.particules = core::array::from_fn(|_| {
-            let rng_nb = rng.gen() * weight_tot;
-            for i in 0..NP {
-                if (&cum_weight)[i] > rng_nb {
-                    return self.particules[i];
+        self.particules = (0..self.num_particules)
+            .map(|_| {
+                let rng_nb = rng.gen() * weight_tot;
+                for i in 0..self.num_particules {
+                    if (&cum_weight)[i] > rng_nb {
+                        return self.particules[i].clone();
+                    }
                 }
-            }
-            unreachable!()
-        });
+                unreachable!()
+            })
+            .collect();
     }
 
     // fn resampling_sort(&mut self, weights: [T; NP]) {
@@ -129,15 +165,15 @@ where
         let x = self
             .particules
             .iter()
-            .fold(SVector::<T, S>::zeros(), |a, b| a + b)
-            / T::from_usize(NP).unwrap();
+            .fold(OVector::<T, S>::zeros(), |a, b| a + b)
+            / T::from_usize(self.num_particules).unwrap();
         let cov = self
             .particules
             .iter()
-            .map(|p| p - x)
-            .map(|dx| dx * dx.transpose())
-            .fold(SMatrix::<T, S, S>::zeros(), |a, b| a + b)
-            / T::from_usize(NP).unwrap();
+            .map(|p| p - &x)
+            .map(|dx| &dx * dx.transpose())
+            .fold(OMatrix::<T, S, S>::zeros(), |a, b| a + b)
+            / T::from_usize(self.num_particules).unwrap();
         GaussianState { x, cov }
     }
 }

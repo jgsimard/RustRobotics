@@ -1,4 +1,4 @@
-use nalgebra::{Matrix2, Matrix3, Vector2, Vector3};
+use nalgebra::{Const, Matrix2, Matrix3, Vector2, Vector3};
 
 use rustc_hash::FxHashMap;
 use std::error::Error;
@@ -36,14 +36,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         cov: Matrix3::<f64>::from_diagonal(&Vector3::new(1e-10, 1e-10, 1e-10)),
     };
 
-    let mut particle_filter = ParticleFilterKnownCorrespondences::<f64, 3, 2, 2, 300>::new(
-        r,
-        q,
-        landmarks,
-        measurement_model,
-        motion_model,
-        state,
-    );
+    let mut particle_filter =
+        ParticleFilterKnownCorrespondences::<f64, Const<3>, Const<2>, Const<2>>::new(
+            r,
+            q,
+            landmarks,
+            measurement_model,
+            motion_model,
+            state,
+            300,
+        );
     let mut time_past = gt_state.time;
 
     let mut states = Vec::new();

@@ -1,7 +1,7 @@
 // // Extended kalman filter (EKF) localization sample
 // //         Jean-Gabriel Simard (@jgsimard)
 
-use nalgebra::{Matrix2, Matrix4, Vector2, Vector4};
+use nalgebra::{Const, Matrix2, Matrix4, Vector2, Vector4};
 use plotters::prelude::*;
 use rand_distr::{Distribution, Normal};
 use std::error::Error;
@@ -75,7 +75,7 @@ fn run() -> History {
     q = q * q; // predict state covariance
 
     let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
-    let ukf = UnscentedKalmanFilter::<f64, 4, 2, 2>::new(
+    let ukf = UnscentedKalmanFilter::<f64, Const<4>, Const<2>, Const<2>>::new(
         q,
         r,
         Box::new(SimpleProblemMeasurementModel {}),

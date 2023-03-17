@@ -64,9 +64,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         state = ekf.estimate(&state, odometry, measurements, dt);
 
-        states.push(state);
+        states.push(state.clone());
         if measurement_update {
-            states_measurement.push(state)
+            states_measurement.push(state.clone())
         }
     }
     println!("measurement updates = {}", states_measurement.len());

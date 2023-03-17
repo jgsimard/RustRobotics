@@ -1,4 +1,6 @@
-use nalgebra::{RealField, SMatrix, SVector};
+use nalgebra::{
+    allocator::Allocator, Const, DefaultAllocator, Dim, DimName, OMatrix, OVector, RealField,
+};
 use rustc_hash::FxHashMap;
 
 use crate::models::measurement::MeasurementModel;
@@ -6,19 +8,43 @@ use crate::models::motion::MotionModel;
 use crate::utils::state::GaussianState;
 
 /// S : State Size, Z: Observation Size, U: Input Size
-pub struct ExtendedKalmanFilter<T: RealField, const S: usize, const Z: usize, const U: usize> {
-    r: SMatrix<T, S, S>,
-    q: SMatrix<T, Z, Z>,
+pub struct ExtendedKalmanFilter<T: RealField, S: Dim + DimName, Z: Dim, U: Dim>
+where
+    DefaultAllocator: Allocator<T, S>
+        + Allocator<T, U>
+        + Allocator<T, Z>
+        + Allocator<T, S, S>
+        + Allocator<T, Z, Z>
+        + Allocator<T, Z, S>
+        + Allocator<T, S, U>
+        + Allocator<T, U, U>
+        + Allocator<T, S, Z>
+        + Allocator<T, Const<1>, S>
+        + Allocator<T, Const<1>, Z>,
+{
+    r: OMatrix<T, S, S>,
+    q: OMatrix<T, Z, Z>,
     measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
     motion_model: Box<dyn MotionModel<T, S, Z, U>>,
 }
 
-impl<T: RealField, const S: usize, const Z: usize, const U: usize>
-    ExtendedKalmanFilter<T, S, Z, U>
+impl<T: RealField, S: Dim + DimName, Z: Dim, U: Dim> ExtendedKalmanFilter<T, S, Z, U>
+where
+    DefaultAllocator: Allocator<T, S>
+        + Allocator<T, U>
+        + Allocator<T, Z>
+        + Allocator<T, S, S>
+        + Allocator<T, Z, Z>
+        + Allocator<T, Z, S>
+        + Allocator<T, S, U>
+        + Allocator<T, U, U>
+        + Allocator<T, S, Z>
+        + Allocator<T, Const<1>, S>
+        + Allocator<T, Const<1>, Z>,
 {
     pub fn new(
-        r: SMatrix<T, S, S>,
-        q: SMatrix<T, Z, Z>,
+        r: OMatrix<T, S, S>,
+        q: OMatrix<T, Z, Z>,
         measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
         motion_model: Box<dyn MotionModel<T, S, Z, U>>,
     ) -> ExtendedKalmanFilter<T, S, Z, U> {
@@ -34,8 +60,8 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
         &self,
         // model: &impl ExtendedKalmanFilterModel<T, S, Z, U>,
         estimate: &GaussianState<T, S>,
-        u: &SVector<T, U>,
-        z: &SVector<T, Z>,
+        u: &OVector<T, U>,
+        z: &OVector<T, Z>,
         dt: T,
     ) -> GaussianState<T, S> {
         // predict
@@ -52,7 +78,7 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
         let s = &h * &cov_pred * h.transpose() + &self.q;
         let kalman_gain = &cov_pred * h.transpose() * s.try_inverse().unwrap();
         let x_est = &x_pred + &kalman_gain * (z - z_pred);
-        let cov_est = (SMatrix::<T, S, S>::identity() - kalman_gain * h) * &cov_pred;
+        let cov_est = (OMatrix::<T, S, S>::identity() - kalman_gain * h) * &cov_pred;
         GaussianState {
             x: x_est,
             cov: cov_est,
@@ -63,25 +89,51 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct ExtendedKalmanFilterKnownCorrespondences<
     T: RealField,
-    const S: usize,
-    const Z: usize,
-    const U: usize,
-> {
-    r: SMatrix<T, S, S>,
-    q: SMatrix<T, Z, Z>,
-    landmarks: FxHashMap<u32, SVector<T, S>>,
+    S: Dim + DimName,
+    Z: Dim + DimName,
+    U: Dim,
+> where
+    DefaultAllocator: Allocator<T, S>
+        + Allocator<T, U>
+        + Allocator<T, Z>
+        + Allocator<T, S, S>
+        + Allocator<T, Z, Z>
+        + Allocator<T, Z, S>
+        + Allocator<T, S, U>
+        + Allocator<T, U, U>
+        + Allocator<T, S, Z>
+        + Allocator<T, Const<1>, S>
+        + Allocator<T, Const<1>, Z>
+        + Allocator<T, U, S>,
+{
+    r: OMatrix<T, S, S>,
+    q: OMatrix<T, Z, Z>,
+    landmarks: FxHashMap<u32, OVector<T, S>>,
     measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
     motion_model: Box<dyn MotionModel<T, S, Z, U>>,
     fixed_noise: bool,
 }
 
-impl<T: RealField, const S: usize, const Z: usize, const U: usize>
+impl<T: RealField, S: Dim + DimName, Z: Dim + DimName, U: Dim>
     ExtendedKalmanFilterKnownCorrespondences<T, S, Z, U>
+where
+    DefaultAllocator: Allocator<T, S>
+        + Allocator<T, U>
+        + Allocator<T, Z>
+        + Allocator<T, S, S>
+        + Allocator<T, Z, Z>
+        + Allocator<T, Z, S>
+        + Allocator<T, S, U>
+        + Allocator<T, U, U>
+        + Allocator<T, S, Z>
+        + Allocator<T, Const<1>, S>
+        + Allocator<T, Const<1>, Z>
+        + Allocator<T, U, S>,
 {
     pub fn new(
-        r: SMatrix<T, S, S>,
-        q: SMatrix<T, Z, Z>,
-        landmarks: FxHashMap<u32, SVector<T, S>>,
+        r: OMatrix<T, S, S>,
+        q: OMatrix<T, Z, Z>,
+        landmarks: FxHashMap<u32, OVector<T, S>>,
         measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
         motion_model: Box<dyn MotionModel<T, S, Z, U>>,
         fixed_noise: bool,
@@ -99,8 +151,8 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
     pub fn estimate(
         &self,
         estimate: &GaussianState<T, S>,
-        control: Option<SVector<T, U>>,
-        measurements: Option<Vec<(u32, SVector<T, Z>)>>,
+        control: Option<OVector<T, U>>,
+        measurements: Option<Vec<(u32, OVector<T, Z>)>>,
         dt: T,
     ) -> GaussianState<T, S> {
         let mut x_out = estimate.x.clone();
@@ -137,7 +189,7 @@ impl<T: RealField, const S: usize, const Z: usize, const U: usize>
                 let s = &h * &cov_out * h.transpose() + &self.q;
                 let kalman_gain = &cov_out * h.transpose() * s.try_inverse().unwrap();
                 x_out += &kalman_gain * (z - z_pred);
-                cov_out = (SMatrix::<T, S, S>::identity() - kalman_gain * h) * &cov_out
+                cov_out = (OMatrix::<T, S, S>::identity() - kalman_gain * h) * &cov_out
             }
         }
 
@@ -155,7 +207,7 @@ mod tests {
     use crate::models::motion::SimpleProblemMotionModel;
     use crate::utils::deg2rad;
     use crate::utils::state::GaussianState;
-    use nalgebra::{Matrix4, Vector2, Vector4};
+    use nalgebra::{Const, Matrix4, Vector2, Vector4};
 
     #[test]
     fn ekf_runs() {
@@ -164,7 +216,12 @@ mod tests {
         let r = nalgebra::Matrix2::identity();
         let motion_model = Box::new(SimpleProblemMotionModel {});
         let measurement_model = Box::new(SimpleProblemMeasurementModel {});
-        let ekf = ExtendedKalmanFilter::<f64, 4, 2, 2>::new(q, r, measurement_model, motion_model);
+        let ekf = ExtendedKalmanFilter::<f64, Const<4>, Const<2>, Const<2>>::new(
+            q,
+            r,
+            measurement_model,
+            motion_model,
+        );
 
         let dt = 0.1;
         let u: Vector2<f64> = Default::default();

@@ -1,4 +1,4 @@
-use nalgebra::{Matrix2, Matrix3, Vector2};
+use nalgebra::{Const, Matrix2, Matrix3, Vector2};
 use plotters::coord::Shift;
 use plotters::prelude::*;
 use std::error::Error;
@@ -44,7 +44,7 @@ pub struct History {
     pub x_dr: Vec<(f64, f64)>,
     pub x_est: Vec<(f64, f64)>,
     // pub gaussian_state: Vec<GaussianState<f64, Const<4>>>,
-    pub gaussian_state: Vec<GaussianState<f64, 4>>,
+    pub gaussian_state: Vec<GaussianState<f64, Const<4>>>,
 }
 
 pub fn chart(
@@ -158,8 +158,8 @@ pub fn chart(
 
 pub fn plot_landmarks(
     dataset: &UtiasDataset,
-    states: &[GaussianState<f64, 3>],
-    states_measurement: &[GaussianState<f64, 3>],
+    states: &[GaussianState<f64, Const<3>>],
+    states_measurement: &[GaussianState<f64, Const<3>>],
     max_time: f64,
     filename: &str,
     name: &str,

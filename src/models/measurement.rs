@@ -1,15 +1,21 @@
-use nalgebra::{Matrix2x3, Matrix2x4, RealField, SMatrix, SVector, Vector2, Vector3, Vector4};
+use nalgebra::{
+    allocator::Allocator, Const, DefaultAllocator, Dim, Matrix2x3, Matrix2x4, OMatrix, OVector,
+    RealField, Vector2, Vector3, Vector4,
+};
 
-pub trait MeasurementModel<T: RealField, const S: usize, const Z: usize> {
-    fn prediction(&self, x: &SVector<T, S>, landmark: Option<&SVector<T, S>>) -> SVector<T, Z>;
-    fn jacobian(&self, x: &SVector<T, S>, landmark: Option<&SVector<T, S>>) -> SMatrix<T, Z, S>;
+pub trait MeasurementModel<T: RealField, S: Dim, Z: Dim>
+where
+    DefaultAllocator: Allocator<T, S> + Allocator<T, Z> + Allocator<T, S, S> + Allocator<T, Z, S>,
+{
+    fn prediction(&self, x: &OVector<T, S>, landmark: Option<&OVector<T, S>>) -> OVector<T, Z>;
+    fn jacobian(&self, x: &OVector<T, S>, landmark: Option<&OVector<T, S>>) -> OMatrix<T, Z, S>;
 }
 
 /// Measurement = [range, bearing, signature]
 /// Probabilistic Robotics p. 177
 pub struct RangeBearingMeasurementModel;
 
-impl MeasurementModel<f64, 3, 2> for RangeBearingMeasurementModel {
+impl MeasurementModel<f64, Const<3>, Const<2>> for RangeBearingMeasurementModel {
     fn prediction(&self, x: &Vector3<f64>, landmark: Option<&Vector3<f64>>) -> Vector2<f64> {
         //state
         let x_x = x[0];
@@ -55,7 +61,7 @@ impl MeasurementModel<f64, 3, 2> for RangeBearingMeasurementModel {
 
 pub struct SimpleProblemMeasurementModel;
 
-impl MeasurementModel<f64, 4, 2> for SimpleProblemMeasurementModel {
+impl MeasurementModel<f64, Const<4>, Const<2>> for SimpleProblemMeasurementModel {
     fn prediction(&self, x: &Vector4<f64>, _landmark: Option<&Vector4<f64>>) -> Vector2<f64> {
         x.xy()
     }
