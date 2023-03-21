@@ -8,3 +8,4 @@ dataset/
 .cargo/
 fleet.toml
 rust-toolchain.toml
+.vscode/

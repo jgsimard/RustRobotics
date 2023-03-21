@@ -1,5 +1,5 @@
 use nalgebra::{
-    allocator::Allocator, Const, DefaultAllocator, Dim, DimName, OMatrix, OVector, RealField,
+    allocator::Allocator, Const, DefaultAllocator, Dim, OMatrix, OVector, RealField, U1,
 };
 use rand::distributions::Distribution;
 
@@ -27,7 +27,7 @@ impl std::fmt::Display for Error {
     }
 }
 
-pub struct MultiVariateNormal<T: RealField, D: Dim + DimName>
+pub struct MultiVariateNormal<T: RealField, D: Dim>
 where
     DefaultAllocator: Allocator<T, D> + Allocator<T, D, D>,
 {
@@ -37,19 +37,19 @@ where
     factor: T,
 }
 
-impl<T: RealField, D: Dim + DimName> MultiVariateNormal<T, D>
+impl<T: RealField, D: Dim> MultiVariateNormal<T, D>
 where
     rand_distr::StandardNormal: Distribution<T>,
     DefaultAllocator: Allocator<T, D> + Allocator<T, D, D> + Allocator<T, Const<1>, D>,
 {
-    // {
     pub fn new(mean: &OVector<T, D>, covariance: &OMatrix<T, D, D>) -> Result<Self, Error> {
         let Some(covariance_cholesky) = covariance.clone().cholesky() else {
             return Err(Error{error_type : ErrorType::CovarianceNotSemiDefinitePositive})
         };
         let det = covariance_cholesky.determinant();
         let precision = covariance_cholesky.inverse();
-        let factor = T::one() / (T::two_pi().powi(D::dim() as i32) * det).sqrt();
+        let factor =
+            T::one() / (T::two_pi().powi(mean.shape_generic().0.value() as i32) * det).sqrt();
         let mvn = MultiVariateNormal {
             mean: mean.clone(),
             precision,
@@ -70,7 +70,13 @@ where
     pub fn sample(&self) -> OVector<T, D> {
         // https://juanitorduz.github.io/multivariate_normal/
         let mut rng = rand::thread_rng();
-        let u = OVector::<T, D>::from_distribution(&rand_distr::StandardNormal, &mut rng);
+        let dim = self.mean.shape_generic().0;
+        let u = OVector::<T, D>::from_distribution_generic(
+            dim,
+            U1,
+            &rand_distr::StandardNormal,
+            &mut rng,
+        );
         &self.mean + &self.lower * u
     }
 }

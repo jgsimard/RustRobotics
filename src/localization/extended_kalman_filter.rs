@@ -1,6 +1,4 @@
-use nalgebra::{
-    allocator::Allocator, Const, DefaultAllocator, Dim, DimName, OMatrix, OVector, RealField,
-};
+use nalgebra::{allocator::Allocator, Const, DefaultAllocator, Dim, OMatrix, OVector, RealField};
 use rustc_hash::FxHashMap;
 
 use crate::models::measurement::MeasurementModel;
@@ -8,7 +6,7 @@ use crate::models::motion::MotionModel;
 use crate::utils::state::GaussianState;
 
 /// S : State Size, Z: Observation Size, U: Input Size
-pub struct ExtendedKalmanFilter<T: RealField, S: Dim + DimName, Z: Dim, U: Dim>
+pub struct ExtendedKalmanFilter<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
     DefaultAllocator: Allocator<T, S>
         + Allocator<T, U>
@@ -28,7 +26,7 @@ where
     motion_model: Box<dyn MotionModel<T, S, Z, U>>,
 }
 
-impl<T: RealField, S: Dim + DimName, Z: Dim, U: Dim> ExtendedKalmanFilter<T, S, Z, U>
+impl<T: RealField, S: Dim, Z: Dim, U: Dim> ExtendedKalmanFilter<T, S, Z, U>
 where
     DefaultAllocator: Allocator<T, S>
         + Allocator<T, U>
@@ -58,7 +56,6 @@ where
 
     pub fn estimate(
         &self,
-        // model: &impl ExtendedKalmanFilterModel<T, S, Z, U>,
         estimate: &GaussianState<T, S>,
         u: &OVector<T, U>,
         z: &OVector<T, Z>,
@@ -78,7 +75,8 @@ where
         let s = &h * &cov_pred * h.transpose() + &self.q;
         let kalman_gain = &cov_pred * h.transpose() * s.try_inverse().unwrap();
         let x_est = &x_pred + &kalman_gain * (z - z_pred);
-        let cov_est = (OMatrix::<T, S, S>::identity() - kalman_gain * h) * &cov_pred;
+        let shape = cov_pred.shape_generic();
+        let cov_est = (OMatrix::identity_generic(shape.0, shape.1) - kalman_gain * h) * &cov_pred;
         GaussianState {
             x: x_est,
             cov: cov_est,
@@ -87,12 +85,8 @@ where
 }
 
 /// S : State Size, Z: Observation Size, U: Input Size
-pub struct ExtendedKalmanFilterKnownCorrespondences<
-    T: RealField,
-    S: Dim + DimName,
-    Z: Dim + DimName,
-    U: Dim,
-> where
+pub struct ExtendedKalmanFilterKnownCorrespondences<T: RealField, S: Dim, Z: Dim, U: Dim>
+where
     DefaultAllocator: Allocator<T, S>
         + Allocator<T, U>
         + Allocator<T, Z>
@@ -114,8 +108,7 @@ pub struct ExtendedKalmanFilterKnownCorrespondences<
     fixed_noise: bool,
 }
 
-impl<T: RealField, S: Dim + DimName, Z: Dim + DimName, U: Dim>
-    ExtendedKalmanFilterKnownCorrespondences<T, S, Z, U>
+impl<T: RealField, S: Dim, Z: Dim, U: Dim> ExtendedKalmanFilterKnownCorrespondences<T, S, Z, U>
 where
     DefaultAllocator: Allocator<T, S>
         + Allocator<T, U>
@@ -179,6 +172,7 @@ where
 
         // update / correction step
         if let Some(measurements) = measurements {
+            let shape = cov_out.shape_generic();
             for (id, z) in measurements
                 .iter()
                 .filter(|(id, _)| self.landmarks.contains_key(id))
@@ -189,7 +183,7 @@ where
                 let s = &h * &cov_out * h.transpose() + &self.q;
                 let kalman_gain = &cov_out * h.transpose() * s.try_inverse().unwrap();
                 x_out += &kalman_gain * (z - z_pred);
-                cov_out = (OMatrix::<T, S, S>::identity() - kalman_gain * h) * &cov_out
+                cov_out = (OMatrix::identity_generic(shape.0, shape.1) - kalman_gain * h) * &cov_out
             }
         }
 

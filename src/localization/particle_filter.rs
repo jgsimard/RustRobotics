@@ -1,4 +1,3 @@
-use nalgebra::DimName;
 use nalgebra::{allocator::Allocator, Const, DefaultAllocator, Dim, OMatrix, OVector, RealField};
 use rand::distributions::Distribution;
 use rand::Rng;
@@ -11,12 +10,8 @@ use crate::utils::mvn::MultiVariateNormal;
 use crate::utils::state::GaussianState;
 
 /// S : State Size, Z: Observation Size, U: Input Size
-pub struct ParticleFilterKnownCorrespondences<
-    T: RealField,
-    S: Dim + DimName,
-    Z: Dim + DimName,
-    U: Dim,
-> where
+pub struct ParticleFilterKnownCorrespondences<T: RealField, S: Dim, Z: Dim, U: Dim>
+where
     DefaultAllocator: Allocator<T, S>
         + Allocator<T, U>
         + Allocator<T, Z>
@@ -34,11 +29,9 @@ pub struct ParticleFilterKnownCorrespondences<
     measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
     motion_model: Box<dyn MotionModel<T, S, Z, U>>,
     pub particules: Vec<OVector<T, S>>,
-    num_particules: usize,
 }
 
-impl<T: RealField + Copy, S: Dim + DimName, Z: Dim + DimName, U: Dim>
-    ParticleFilterKnownCorrespondences<T, S, Z, U>
+impl<T: RealField + Copy, S: Dim, Z: Dim, U: Dim> ParticleFilterKnownCorrespondences<T, S, Z, U>
 where
     StandardNormal: Distribution<T>,
     Standard: Distribution<T>,
@@ -75,7 +68,6 @@ where
             measurement_model,
             motion_model,
             particules,
-            num_particules,
         }
     }
 
@@ -94,8 +86,10 @@ where
         }
 
         if let Some(measurements) = measurements {
-            let mut weights = vec![T::one(); self.num_particules];
-            let mvn = MultiVariateNormal::new(&OVector::<T, Z>::zeros(), &self.q).unwrap();
+            let mut weights = vec![T::one(); self.particules.len()];
+            let shape = measurements[0].1.shape_generic();
+            let mvn = MultiVariateNormal::new(&OMatrix::zeros_generic(shape.0, shape.1), &self.q)
+                .unwrap();
 
             for (id, z) in measurements
                 .iter()
@@ -116,7 +110,7 @@ where
 
     fn resampling(&mut self, weights: &[T]) {
         let mut weight_tot = T::zero();
-        let cum_weight: Vec<T> = (0..self.num_particules)
+        let cum_weight: Vec<T> = (0..self.particules.len())
             .map(|i| {
                 weight_tot += weights[i];
                 weight_tot
@@ -125,10 +119,10 @@ where
 
         // sampling
         let mut rng = rand::thread_rng();
-        self.particules = (0..self.num_particules)
+        self.particules = (0..self.particules.len())
             .map(|_| {
                 let rng_nb = rng.gen() * weight_tot;
-                for i in 0..self.num_particules {
+                for i in 0..self.particules.len() {
                     if (&cum_weight)[i] > rng_nb {
                         return self.particules[i].clone();
                     }
@@ -162,18 +156,19 @@ where
     // }
 
     pub fn gaussian_estimate(&self) -> GaussianState<T, S> {
+        let shape = self.particules[0].shape_generic();
         let x = self
             .particules
             .iter()
-            .fold(OVector::<T, S>::zeros(), |a, b| a + b)
-            / T::from_usize(self.num_particules).unwrap();
+            .fold(OMatrix::zeros_generic(shape.0, shape.1), |a, b| a + b)
+            / T::from_usize(self.particules.len()).unwrap();
         let cov = self
             .particules
             .iter()
             .map(|p| p - &x)
             .map(|dx| &dx * dx.transpose())
-            .fold(OMatrix::<T, S, S>::zeros(), |a, b| a + b)
-            / T::from_usize(self.num_particules).unwrap();
+            .fold(OMatrix::zeros_generic(shape.0, shape.0), |a, b| a + b)
+            / T::from_usize(self.particules.len()).unwrap();
         GaussianState { x, cov }
     }
 }

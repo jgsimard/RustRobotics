@@ -1,5 +1,5 @@
 use nalgebra::{
-    allocator::Allocator, Const, DefaultAllocator, Dim, DimName, OMatrix, OVector, RealField,
+    allocator::Allocator, Const, DefaultAllocator, Dim, OMatrix, OVector, RealField, U1,
 };
 
 use crate::models::measurement::MeasurementModel;
@@ -7,7 +7,7 @@ use crate::models::motion::MotionModel;
 use crate::utils::state::GaussianState;
 
 /// S : State Size, Z: Observation Size, U: Input Size
-pub struct UnscentedKalmanFilter<T: RealField, S: Dim + DimName, Z: Dim + DimName, U: Dim>
+pub struct UnscentedKalmanFilter<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
     DefaultAllocator: Allocator<T, S>
         + Allocator<T, U>
@@ -43,8 +43,6 @@ where
         + Allocator<T, S, Z>
         + Allocator<T, Const<1>, S>
         + Allocator<T, Const<1>, Z>,
-    S: DimName,
-    Z: DimName,
 {
     pub fn new(
         q: OMatrix<T, S, S>,
@@ -55,8 +53,9 @@ where
         beta: T,
         kappa: T,
     ) -> UnscentedKalmanFilter<T, S, Z, U> {
+        let dim = q.shape_generic().0.value();
         let (mw, cw, gamma) =
-            UnscentedKalmanFilter::<T, S, Z, U>::sigma_weights(alpha, beta, kappa);
+            UnscentedKalmanFilter::<T, S, Z, U>::sigma_weights(dim, alpha, beta, kappa);
         UnscentedKalmanFilter {
             q,
             r,
@@ -67,13 +66,13 @@ where
             cw,
         }
     }
-    fn sigma_weights(alpha: T, beta: T, kappa: T) -> (Vec<T>, Vec<T>, T) {
-        let n = T::from_usize(S::USIZE).unwrap();
+    fn sigma_weights(dim: usize, alpha: T, beta: T, kappa: T) -> (Vec<T>, Vec<T>, T) {
+        let n = T::from_usize(dim).unwrap();
         let lambda = alpha.powi(2) * (n + kappa) - n;
 
         let v = T::one() / ((T::one() + T::one()) * (n + lambda));
-        let mut mw = vec![v; 2 * S::USIZE + 1];
-        let mut cw = vec![v; 2 * S::USIZE + 1];
+        let mut mw = vec![v; 2 * dim + 1];
+        let mut cw = vec![v; 2 * dim + 1];
 
         // special cases
         let v = lambda / (n + lambda);
@@ -85,6 +84,7 @@ where
     }
 
     fn generate_sigma_points(&self, state: &GaussianState<T, S>) -> Vec<OVector<T, S>> {
+        let dim = self.q.shape_generic().0.value();
         // use cholesky to compute the matrix square root  // cholesky(A) = L * L^T
         let sigma = state.cov.clone().cholesky().expect("unable to sqrt").l() * self.gamma;
         // let mut sigma_points = vec![state.x; 2 * S::USIZE + 1];
@@ -93,9 +93,9 @@ where
         //     sigma_points[i + 1] += sigma_column;
         //     sigma_points[i + 1 + S::USIZE] -= sigma_column;
         // }
-        let mut sigma_points = Vec::with_capacity(2 * S::USIZE + 1);
+        let mut sigma_points = Vec::with_capacity(2 * dim + 1);
         sigma_points.push(state.x.clone());
-        for i in 0..S::USIZE {
+        for i in 0..dim {
             let sigma_column = sigma.column(i);
             sigma_points.push(&state.x + sigma_column);
             sigma_points.push(&state.x - sigma_column);
@@ -110,6 +110,8 @@ where
         z: &OVector<T, Z>,
         dt: T,
     ) -> GaussianState<T, S> {
+        let dim_s = self.q.shape_generic().0;
+        let dim_z = self.r.shape_generic().0;
         // predict
         let sigma_points = self.generate_sigma_points(state);
         let sp_xpred: Vec<OVector<T, S>> = sigma_points
@@ -121,14 +123,14 @@ where
             .iter()
             .zip(self.mw.iter())
             .map(|(x, w)| x * *w)
-            .sum();
+            .fold(OMatrix::zeros_generic(dim_s, U1), |a, b| a + b);
 
         let cov_xpred = sp_xpred
             .iter()
             .map(|x| x - &mean_xpred)
             .zip(self.cw.iter())
             .map(|(dx, cw)| &dx * dx.transpose() * *cw)
-            .sum::<OMatrix<T, S, S>>()
+            .fold(OMatrix::zeros_generic(dim_s, dim_s), |a, b| a + b)
             + &self.q;
 
         let prediction = GaussianState {
@@ -143,14 +145,18 @@ where
             .map(|x| self.observation_model.prediction(x, None))
             .collect();
 
-        let mean_z: OVector<T, Z> = sp_z.iter().zip(self.mw.iter()).map(|(x, w)| x * *w).sum();
+        let mean_z: OVector<T, Z> = sp_z
+            .iter()
+            .zip(self.mw.iter())
+            .map(|(x, w)| x * *w)
+            .fold(OMatrix::zeros_generic(dim_z, U1), |a, b| a + b);
 
         let cov_z = sp_z
             .iter()
             .map(|x| x - &mean_z)
             .zip(self.cw.iter())
             .map(|(dx, cw)| &dx * dx.transpose() * *cw)
-            .sum::<OMatrix<T, Z, Z>>()
+            .fold(OMatrix::zeros_generic(dim_z, dim_z), |a, b| a + b)
             + &self.r;
 
         let s = sp_xpred
@@ -159,8 +165,7 @@ where
             .map(|(x_pred, (z_point, cw))| {
                 (x_pred - &mean_xpred) * (z_point - &mean_z).transpose() * *cw
             })
-            .sum::<OMatrix<T, S, Z>>();
-        // .fold(OMatrix::<T, S, Z>::zeros(), |a, b| a + b);
+            .fold(OMatrix::zeros_generic(dim_s, dim_z), |a, b| a + b);
 
         let y = z - mean_z;
         let kalman_gain = s * cov_z.clone().try_inverse().unwrap();
