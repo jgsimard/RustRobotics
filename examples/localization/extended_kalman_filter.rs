@@ -106,6 +106,7 @@ fn run() -> History {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    std::fs::create_dir_all("./img")?;
     // get data
     let history = run();
     let len = history.z.len();

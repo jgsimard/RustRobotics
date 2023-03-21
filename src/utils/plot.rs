@@ -164,6 +164,7 @@ pub fn plot_landmarks(
     filename: &str,
     name: &str,
 ) -> Result<(), Box<dyn Error>> {
+    std::fs::create_dir_all("./img")?;
     let root = BitMapBackend::new(filename, (1024, 768)).into_drawing_area();
     root.fill(&WHITE)?;
     // let name = "Particle Filter (Monte Carlo) landmarks";

@@ -131,6 +131,7 @@ impl<'a> Iterator for SlamCourseDatasetIteratorRef<'a> {
 /// - current robot pose (red)
 /// - observations made at this time step (line between robot and landmark)
 fn plot(dataset: &SlamCourseDataset) -> Result<(), Box<dyn Error>> {
+    std::fs::create_dir_all("./img")?;
     let filename = "./img/slam_course.png";
     let name = "SLAM course";
     let root = BitMapBackend::new(filename, (1024, 768)).into_drawing_area();
