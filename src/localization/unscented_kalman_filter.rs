@@ -24,8 +24,8 @@ where
     q: OMatrix<T, S, S>,
     r: OMatrix<T, Z, Z>,
     gamma: T,
-    observation_model: Box<dyn MeasurementModel<T, S, Z>>,
-    motion_model: Box<dyn MotionModel<T, S, Z, U>>,
+    observation_model: Box<dyn MeasurementModel<T, S, Z> + Send>,
+    motion_model: Box<dyn MotionModel<T, S, Z, U> + Send>,
     mw: Vec<T>,
     cw: Vec<T>,
 }
@@ -47,8 +47,8 @@ where
     pub fn new(
         q: OMatrix<T, S, S>,
         r: OMatrix<T, Z, Z>,
-        observation_model: Box<dyn MeasurementModel<T, S, Z>>,
-        motion_model: Box<dyn MotionModel<T, S, Z, U>>,
+        observation_model: Box<dyn MeasurementModel<T, S, Z> + Send>,
+        motion_model: Box<dyn MotionModel<T, S, Z, U> + Send>,
         alpha: T,
         beta: T,
         kappa: T,

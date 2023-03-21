@@ -22,8 +22,8 @@ where
 {
     r: OMatrix<T, S, S>,
     q: OMatrix<T, Z, Z>,
-    measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
-    motion_model: Box<dyn MotionModel<T, S, Z, U>>,
+    measurement_model: Box<dyn MeasurementModel<T, S, Z> + Send>,
+    motion_model: Box<dyn MotionModel<T, S, Z, U> + Send>,
 }
 
 impl<T: RealField, S: Dim, Z: Dim, U: Dim> ExtendedKalmanFilter<T, S, Z, U>
@@ -43,8 +43,8 @@ where
     pub fn new(
         r: OMatrix<T, S, S>,
         q: OMatrix<T, Z, Z>,
-        measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
-        motion_model: Box<dyn MotionModel<T, S, Z, U>>,
+        measurement_model: Box<dyn MeasurementModel<T, S, Z> + Send>,
+        motion_model: Box<dyn MotionModel<T, S, Z, U> + Send>,
     ) -> ExtendedKalmanFilter<T, S, Z, U> {
         ExtendedKalmanFilter {
             r,
@@ -103,8 +103,8 @@ where
     r: OMatrix<T, S, S>,
     q: OMatrix<T, Z, Z>,
     landmarks: FxHashMap<u32, OVector<T, S>>,
-    measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
-    motion_model: Box<dyn MotionModel<T, S, Z, U>>,
+    measurement_model: Box<dyn MeasurementModel<T, S, Z> + Send>,
+    motion_model: Box<dyn MotionModel<T, S, Z, U> + Send>,
     fixed_noise: bool,
 }
 
@@ -127,8 +127,8 @@ where
         r: OMatrix<T, S, S>,
         q: OMatrix<T, Z, Z>,
         landmarks: FxHashMap<u32, OVector<T, S>>,
-        measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
-        motion_model: Box<dyn MotionModel<T, S, Z, U>>,
+        measurement_model: Box<dyn MeasurementModel<T, S, Z> + Send>,
+        motion_model: Box<dyn MotionModel<T, S, Z, U> + Send>,
         fixed_noise: bool,
     ) -> ExtendedKalmanFilterKnownCorrespondences<T, S, Z, U> {
         ExtendedKalmanFilterKnownCorrespondences {

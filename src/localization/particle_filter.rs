@@ -26,8 +26,8 @@ where
 {
     q: OMatrix<T, Z, Z>,
     landmarks: FxHashMap<u32, OVector<T, S>>,
-    measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
-    motion_model: Box<dyn MotionModel<T, S, Z, U>>,
+    measurement_model: Box<dyn MeasurementModel<T, S, Z> + Send>,
+    motion_model: Box<dyn MotionModel<T, S, Z, U> + Send>,
     pub particules: Vec<OVector<T, S>>,
 }
 
@@ -51,8 +51,8 @@ where
         initial_noise: OMatrix<T, S, S>,
         q: OMatrix<T, Z, Z>,
         landmarks: FxHashMap<u32, OVector<T, S>>,
-        measurement_model: Box<dyn MeasurementModel<T, S, Z>>,
-        motion_model: Box<dyn MotionModel<T, S, Z, U>>,
+        measurement_model: Box<dyn MeasurementModel<T, S, Z> + Send>,
+        motion_model: Box<dyn MotionModel<T, S, Z, U> + Send>,
         initial_state: GaussianState<T, S>,
         num_particules: usize,
     ) -> ParticleFilterKnownCorrespondences<T, S, Z, U> {

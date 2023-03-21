@@ -19,9 +19,9 @@ rustc-hash = "1.1"
 rand = "0.8"
 rand_distr = "0.4"
 
-# not used at the moment
-# pyo3 = { version = "0.18", features = ["extension-module"] }
-# numpy = "0.18" # for python port
+# python
+pyo3 = { version = "0.18", features = ["extension-module"] }
+numpy = {version = "0.18", features = ["nalgebra"] }
 
 [dev-dependencies]
 criterion = "0.4"
