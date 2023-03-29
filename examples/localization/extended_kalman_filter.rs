@@ -106,19 +106,19 @@ fn run() -> History {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    std::fs::create_dir_all("./img")?;
     // get data
     let history = run();
     let len = history.z.len();
+
+    // Create output directory if it didnt exist
+    std::fs::create_dir_all("./img")?;
 
     // Plot image
     let root = BitMapBackend::new("./img/ekf.png", (1024, 768)).into_drawing_area();
     root.fill(&WHITE)?;
     chart(&root, &history, len - 1, "Extended Kalman Filter")?;
     // To avoid the IO failure being ignored silently, we manually call the present function
-    root.present().expect(
-        "Unable to write result to file, please make sure 'img' dir exists under current dir",
-    );
+    root.present()?;
     println!("Result has been saved to {}", "./img/ekf.png");
 
     // Plot GIF
@@ -127,9 +127,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         root.fill(&WHITE)?;
         chart(&root, &history, i, "Extended Kalman Filter")?;
         // To avoid the IO failure being ignored silently, we manually call the present function
-        root.present().expect(
-            "Unable to write result to file, please make sure 'img' dir exists under current dir",
-        );
+        root.present()?;
     }
     println!("Result has been saved to {}", "./img/ekf.gif");
 

@@ -164,7 +164,9 @@ pub fn plot_landmarks(
     filename: &str,
     name: &str,
 ) -> Result<(), Box<dyn Error>> {
+    // Create output directory if it didnt exist
     std::fs::create_dir_all("./img")?;
+
     let root = BitMapBackend::new(filename, (1024, 768)).into_drawing_area();
     root.fill(&WHITE)?;
     // let name = "Particle Filter (Monte Carlo) landmarks";
@@ -238,9 +240,7 @@ pub fn plot_landmarks(
         .border_style(BLACK)
         .draw()?;
 
-    root.present().expect(
-        "Unable to write result to file, please make sure 'img' dir exists under current dir",
-    );
+    root.present()?;
 
     Ok(())
 }
