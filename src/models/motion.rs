@@ -24,24 +24,12 @@ where
 }
 
 pub struct Velocity {
-    a1: f64,
-    a2: f64,
-    a3: f64,
-    a4: f64,
-    a5: f64,
-    a6: f64,
+    a: [f64; 6],
 }
 
 impl Velocity {
-    pub fn new(a1: f64, a2: f64, a3: f64, a4: f64, a5: f64, a6: f64) -> Box<Velocity> {
-        Box::new(Velocity {
-            a1,
-            a2,
-            a3,
-            a4,
-            a5,
-            a6,
-        })
+    pub fn new(a: [f64; 6]) -> Box<Velocity> {
+        Box::new(Velocity { a })
     }
 }
 
@@ -77,7 +65,6 @@ impl MotionModel<f64, Const<3>, Const<2>, Const<2>> for Velocity {
         out
     }
 
-    #[allow(clippy::deprecated_cfg_attr)]
     fn jacobian_wrt_state(&self, x: &Vector3<f64>, u: &Vector2<f64>, dt: f64) -> Matrix3<f64> {
         //state
         let theta = x[2];
@@ -85,6 +72,7 @@ impl MotionModel<f64, Const<3>, Const<2>, Const<2>> for Velocity {
         let v = u[0];
         let w = u[1];
         if w != 0.0 {
+            #[allow(clippy::deprecated_cfg_attr)]
             #[cfg_attr(rustfmt, rustfmt_skip)]
             Matrix3::<f64>::new(
                 1., 0., v / w * (-theta.cos() + (theta + w * dt).cos()),
@@ -92,6 +80,7 @@ impl MotionModel<f64, Const<3>, Const<2>, Const<2>> for Velocity {
                 0., 0., 1.
             )
         } else {
+            #[allow(clippy::deprecated_cfg_attr)]
             #[cfg_attr(rustfmt, rustfmt_skip)]
             Matrix3::<f64>::new(
                 1., 0., -v * theta.sin() * dt,
@@ -139,8 +128,8 @@ impl MotionModel<f64, Const<3>, Const<2>, Const<2>> for Velocity {
         #[allow(clippy::deprecated_cfg_attr)]
         #[cfg_attr(rustfmt, rustfmt_skip)]
         Matrix2::<f64>::new(
-            self.a1 * v2 + self.a2 * w2 + eps, 0.0,
-            0.0, self.a3 * v2 + self.a4 * w2 + eps,
+            self.a[0] * v2 + self.a[1] * w2 + eps, 0.0,
+            0.0, self.a[2] * v2 + self.a[3] * w2 + eps,
         )
     }
 
@@ -155,13 +144,13 @@ impl MotionModel<f64, Const<3>, Const<2>, Const<2>> for Velocity {
         let w2 = w.powi(2);
         let eps = 0.00001;
         let mut rng = rand::thread_rng();
-        let v_noisy = Normal::new(v, (self.a1 * v2 + self.a2 * w2 + eps).sqrt())
+        let v_noisy = Normal::new(v, (self.a[0] * v2 + self.a[1] * w2 + eps).sqrt())
             .unwrap()
             .sample(&mut rng);
-        let w_noisy = Normal::new(w, (self.a3 * v2 + self.a4 * w2 + eps).sqrt())
+        let w_noisy = Normal::new(w, (self.a[2] * v2 + self.a[3] * w2 + eps).sqrt())
             .unwrap()
             .sample(&mut rng);
-        let gamma_noisy = Normal::new(0.0, (self.a5 * v2 + self.a6 * w2).sqrt())
+        let gamma_noisy = Normal::new(0.0, (self.a[4] * v2 + self.a[5] * w2).sqrt())
             .unwrap()
             .sample(&mut rng);
 

@@ -75,7 +75,7 @@ fn run() -> History {
     q = q * q; // predict state covariance
 
     let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
-    let ukf = UnscentedKalmanFilter::<f64, Const<4>, Const<2>, Const<2>>::new(
+    let ukf = UnscentedKalmanFilter::new(
         q,
         r,
         SimpleProblemMeasurementModel::new(),

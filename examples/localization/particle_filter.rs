@@ -1,4 +1,4 @@
-use nalgebra::{Const, Matrix2, Matrix3, Vector2, Vector3};
+use nalgebra::{Matrix2, Matrix3, Vector2, Vector3};
 
 use rustc_hash::FxHashMap;
 use std::error::Error;
@@ -21,8 +21,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let noise = 1.0;
     let noise_w = 30.0;
     let noise_g = 10.0;
-    // let motion_model = Box::new(Velocity4::new(noise, noise, noise_w, noise_w));
-    let motion_model = Velocity::new(noise, noise, noise_w, noise_w, noise_g, noise_g);
+    let motion_model = Velocity::new([noise, noise, noise_w, noise_w, noise_g, noise_g]);
     let q = Matrix2::<f64>::from_diagonal(&Vector2::new(0.1, 0.2));
     //Observation x,y position covariance
     let r = Matrix3::<f64>::from_diagonal(&Vector3::new(0.2, 0.2, 0.2));
@@ -34,16 +33,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         cov: Matrix3::<f64>::from_diagonal(&Vector3::new(1e-10, 1e-10, 1e-10)),
     };
 
-    let mut particle_filter =
-        ParticleFilterKnownCorrespondences::<f64, Const<3>, Const<2>, Const<2>>::new(
-            r,
-            q,
-            landmarks,
-            measurement_model,
-            motion_model,
-            state,
-            300,
-        );
+    let mut particle_filter = ParticleFilterKnownCorrespondences::new(
+        r,
+        q,
+        landmarks,
+        measurement_model,
+        motion_model,
+        state,
+        300,
+    );
     let mut time_past = gt_state.time;
 
     let mut states = Vec::new();

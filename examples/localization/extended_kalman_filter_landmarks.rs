@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let measurement_model = RangeBearingMeasurementModel::new();
     let noise = 1000000.0;
-    let motion_model = Velocity::new(noise, noise, noise, noise, noise, noise);
+    let motion_model = Velocity::new([noise, noise, noise, noise, noise, noise]);
     let mut q = Matrix2::<f64>::from_diagonal(&Vector2::new(350.0, 350.0));
     q = q * q;
     let r = Matrix3::identity(); //Observation x,y position covariance
