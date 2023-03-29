@@ -133,7 +133,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let root = BitMapBackend::new("./img/ukf.png", (1024, 768)).into_drawing_area();
     root.fill(&WHITE)?;
     chart(&root, &history, len - 1, "Unscented Kalman Filter")?;
-    // To avoid the IO failure being ignored silently, we manually call the present function
     root.present()?;
     println!("Result has been saved to {}", "./img/ukf.png");
 
@@ -142,7 +141,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     for i in (0..len).step_by(5) {
         root.fill(&WHITE)?;
         chart(&root, &history, i, "Unscented Kalman Filter")?;
-        // To avoid the IO failure being ignored silently, we manually call the present function
         root.present()?;
     }
     println!("Result has been saved to {}", "./img/ukf.gif");
