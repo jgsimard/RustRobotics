@@ -15,6 +15,12 @@ where
 /// Probabilistic Robotics p. 177
 pub struct RangeBearingMeasurementModel;
 
+impl RangeBearingMeasurementModel {
+    pub fn new() -> Box<RangeBearingMeasurementModel> {
+        Box::new(RangeBearingMeasurementModel {})
+    }
+}
+
 impl MeasurementModel<f64, Const<3>, Const<2>> for RangeBearingMeasurementModel {
     fn prediction(&self, x: &Vector3<f64>, landmark: Option<&Vector3<f64>>) -> Vector2<f64> {
         //state
@@ -60,6 +66,12 @@ impl MeasurementModel<f64, Const<3>, Const<2>> for RangeBearingMeasurementModel 
 }
 
 pub struct SimpleProblemMeasurementModel;
+
+impl SimpleProblemMeasurementModel {
+    pub fn new() -> Box<SimpleProblemMeasurementModel> {
+        Box::new(SimpleProblemMeasurementModel {})
+    }
+}
 
 impl MeasurementModel<f64, Const<4>, Const<2>> for SimpleProblemMeasurementModel {
     fn prediction(&self, x: &Vector4<f64>, _landmark: Option<&Vector4<f64>>) -> Vector2<f64> {

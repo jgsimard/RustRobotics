@@ -78,8 +78,8 @@ fn run() -> History {
     let ukf = UnscentedKalmanFilter::<f64, Const<4>, Const<2>, Const<2>>::new(
         q,
         r,
-        Box::new(SimpleProblemMeasurementModel {}),
-        Box::new(SimpleProblemMotionModel {}),
+        SimpleProblemMeasurementModel::new(),
+        SimpleProblemMotionModel::new(),
         0.1,
         2.0,
         0.0,

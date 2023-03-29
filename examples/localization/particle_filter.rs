@@ -17,14 +17,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     for (id, lm) in &dataset.landmarks {
         landmarks.insert(*id, Vector3::new(lm.x, lm.y, 0.0));
     }
-    let measurement_model = Box::new(RangeBearingMeasurementModel {});
+    let measurement_model = RangeBearingMeasurementModel::new();
     let noise = 1.0;
     let noise_w = 30.0;
     let noise_g = 10.0;
     // let motion_model = Box::new(Velocity4::new(noise, noise, noise_w, noise_w));
-    let motion_model = Box::new(Velocity::new(
-        noise, noise, noise_w, noise_w, noise_g, noise_g,
-    ));
+    let motion_model = Velocity::new(noise, noise, noise_w, noise_w, noise_g, noise_g);
     let q = Matrix2::<f64>::from_diagonal(&Vector2::new(0.1, 0.2));
     //Observation x,y position covariance
     let r = Matrix3::<f64>::from_diagonal(&Vector3::new(0.2, 0.2, 0.2));

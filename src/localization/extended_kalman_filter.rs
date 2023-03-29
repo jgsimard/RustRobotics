@@ -208,8 +208,8 @@ mod tests {
         // setup ukf
         let q = Matrix4::<f64>::from_diagonal(&Vector4::new(0.1, 0.1, deg2rad(1.0), 1.0));
         let r = nalgebra::Matrix2::identity();
-        let motion_model = Box::new(SimpleProblemMotionModel {});
-        let measurement_model = Box::new(SimpleProblemMeasurementModel {});
+        let motion_model = SimpleProblemMotionModel::new();
+        let measurement_model = SimpleProblemMeasurementModel::new();
         let ekf = ExtendedKalmanFilter::<f64, Const<4>, Const<2>, Const<2>>::new(
             q,
             r,

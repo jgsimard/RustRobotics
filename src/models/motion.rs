@@ -33,15 +33,15 @@ pub struct Velocity {
 }
 
 impl Velocity {
-    pub fn new(a1: f64, a2: f64, a3: f64, a4: f64, a5: f64, a6: f64) -> Velocity {
-        Velocity {
+    pub fn new(a1: f64, a2: f64, a3: f64, a4: f64, a5: f64, a6: f64) -> Box<Velocity> {
+        Box::new(Velocity {
             a1,
             a2,
             a3,
             a4,
             a5,
             a6,
-        }
+        })
     }
 }
 
@@ -131,6 +131,7 @@ impl MotionModel<f64, Const<3>, Const<2>, Const<2>> for Velocity {
             )
         }
     }
+
     fn cov_noise_control_space(&self, u: &Vector2<f64>) -> Matrix2<f64> {
         let v2 = u[0].powi(2);
         let w2 = u[1].powi(2);
@@ -205,6 +206,12 @@ impl MotionModel<f64, Const<3>, Const<2>, Const<2>> for Velocity {
 ///
 /// dy/dv = dt * sin(yaw)
 pub struct SimpleProblemMotionModel {}
+
+impl SimpleProblemMotionModel {
+    pub fn new() -> Box<SimpleProblemMotionModel> {
+        Box::new(SimpleProblemMotionModel {})
+    }
+}
 
 impl MotionModel<f64, Const<4>, Const<2>, Const<2>> for SimpleProblemMotionModel {
     fn prediction(&self, x: &Vector4<f64>, u: &Vector2<f64>, dt: f64) -> Vector4<f64> {

@@ -65,8 +65,8 @@ fn run() -> History {
     let ekf = ExtendedKalmanFilter::new(
         q,
         r,
-        Box::new(SimpleProblemMeasurementModel {}),
-        Box::new(SimpleProblemMotionModel {}),
+        SimpleProblemMeasurementModel::new(),
+        SimpleProblemMotionModel::new(),
     );
 
     let simple_problem = SimpleProblem {

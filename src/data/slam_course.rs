@@ -167,7 +167,7 @@ mod tests {
     #[test]
     fn read_slam_course_dataset() -> Result<(), Box<dyn Error>> {
         let dataset = SlamCourseDataset::new()?;
-        plot(&dataset);
+        plot(&dataset)?;
         Ok(())
     }
 }
