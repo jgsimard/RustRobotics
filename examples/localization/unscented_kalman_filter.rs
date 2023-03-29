@@ -1,7 +1,7 @@
 // // Extended kalman filter (EKF) localization sample
 // //         Jean-Gabriel Simard (@jgsimard)
 
-use nalgebra::{Const, Matrix2, Matrix4, Vector2, Vector4};
+use nalgebra::{Matrix2, Matrix4, Vector2, Vector4};
 use plotters::prelude::*;
 use rand_distr::{Distribution, Normal};
 use std::error::Error;
