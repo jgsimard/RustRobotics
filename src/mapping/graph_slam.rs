@@ -450,7 +450,6 @@ mod tests {
         Ok(())
     }
 
-    // FAILS
     #[test]
     fn compute_global_error_correct_pose_landmark() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/new_slam_course/simulation-pose-landmark.g2o";
@@ -468,7 +467,6 @@ mod tests {
         Ok(())
     }
 
-    // FAILS
     #[test]
     fn compute_global_error_correct_dlr() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/new_slam_course/dlr.g2o";
