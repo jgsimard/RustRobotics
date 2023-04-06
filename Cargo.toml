@@ -60,6 +60,10 @@ path = "examples/localization/extended_kalman_filter_landmarks.rs"
 name = "pf_lm"
 path = "examples/localization/particle_filter.rs"
 
+[[example]]
+name = "pose_graph_optimization"
+path = "examples/mapping/pose_graph_optimization.rs"
+
 
 [[bench]]
 name = "kf_benchmark"

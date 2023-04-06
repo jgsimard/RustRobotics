@@ -11,6 +11,8 @@ This package is a rust implementation of robotics algorithms. So far, the main s
     - [Unscented Kalman Filter](#unscented-kalman-filter)
     - [Extended Kalman Filter With Landmarks](#extended-kalman-filter-with-landmarks)
     - [Particle Filter With Landmarks](#particle-filter-with-landmarks)
+  - [Mapping](#mapping)
+    - [Pose Graph Optimization](#pose-graph-optimization)
   - [Sources](#sources)
 
 <!-- * Unscented Kalman filter -->
@@ -79,9 +81,20 @@ cargo run --example ekf_lm
 cargo run --example pf_lm
 ```
 
+## Mapping
+
+### Pose Graph Optimization
+
+This algorithm uses the sparse solver in [Russel](https://github.com/cpmech/russell/tree/main/russell_sparse) so follow the installation instructions. [Algorithm](src/mapping/pose_graph_slam.rs), [Example](examples/mapping/pose_graph_optimization.rs), [Source](https://www.researchgate.net/profile/Mohamed-Mourad-Lafifi/post/What_is_the_relationship_between_GraphSLAM_and_Pose_Graph_SLAM/attachment/613b3f63647f3906fc978272/AS%3A1066449581928450%401631272802870/download/A+tutorial+on+graph-based+SLAM+_+Grisetti2010.pdf)
+
+```bash
+cargo run --example pose_graph_optimization
+```
+
 ## Sources
 
 [Probabilistic Robotics](https://mitpress.mit.edu/9780262201629/probabilistic-robotics/)
 [PythonRobotics](https://github.com/AtsushiSakai/PythonRobotics)
 [Underactuated Robotics](https://underactuated.mit.edu/index.html)
 [Probabilistic-Robotics-Algorithms](https://github.com/ChengeYang/Probabilistic-Robotics-Algorithms)
+[A tutorial on Graph-Based SLAM](https://www.researchgate.net/profile/Mohamed-Mourad-Lafifi/post/What_is_the_relationship_between_GraphSLAM_and_Pose_Graph_SLAM/attachment/613b3f63647f3906fc978272/AS%3A1066449581928450%401631272802870/download/A+tutorial+on+graph-based+SLAM+_+Grisetti2010.pdf)
