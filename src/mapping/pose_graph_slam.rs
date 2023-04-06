@@ -498,25 +498,25 @@ mod tests {
 
     #[test]
     fn read_g2o_file_runs() -> Result<(), Box<dyn Error>> {
-        let filename = "dataset/new_slam_course/simulation-pose-pose.g2o";
+        let filename = "dataset/g2o/simulation-pose-pose.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
         assert_eq!(400, graph.nodes.len());
         assert_eq!(1773, graph.edges.len());
         assert_eq!(1200, graph.x.shape().0);
 
-        let filename = "dataset/new_slam_course/simulation-pose-landmark.g2o";
+        let filename = "dataset/g2o/simulation-pose-landmark.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
         assert_eq!(77, graph.nodes.len());
         assert_eq!(297, graph.edges.len());
         assert_eq!(195, graph.x.shape().0);
 
-        let filename = "dataset/new_slam_course/intel.g2o";
+        let filename = "dataset/g2o/intel.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
         assert_eq!(1728, graph.nodes.len());
         assert_eq!(4830, graph.edges.len());
         assert_eq!(5184, graph.x.shape().0);
 
-        let filename = "dataset/new_slam_course/dlr.g2o";
+        let filename = "dataset/g2o/dlr.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
         assert_eq!(3873, graph.nodes.len());
         assert_eq!(17605, graph.edges.len());
@@ -526,7 +526,7 @@ mod tests {
 
     #[test]
     fn compute_global_error_correct_pose_pose() -> Result<(), Box<dyn Error>> {
-        let filename = "dataset/new_slam_course/simulation-pose-pose.g2o";
+        let filename = "dataset/g2o/simulation-pose-pose.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
         approx::assert_abs_diff_eq!(3558.0723, compute_global_error(&graph), epsilon = 1e-2);
 
@@ -535,7 +535,7 @@ mod tests {
 
     #[test]
     fn compute_global_error_correct_pose_landmark() -> Result<(), Box<dyn Error>> {
-        let filename = "dataset/new_slam_course/simulation-pose-landmark.g2o";
+        let filename = "dataset/g2o/simulation-pose-landmark.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
         approx::assert_abs_diff_eq!(72.50542, compute_global_error(&graph), epsilon = 1e-2);
 
@@ -544,7 +544,7 @@ mod tests {
 
     #[test]
     fn compute_global_error_correct_intel() -> Result<(), Box<dyn Error>> {
-        let filename = "dataset/new_slam_course/intel.g2o";
+        let filename = "dataset/g2o/intel.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
         approx::assert_abs_diff_eq!(6109.409, compute_global_error(&graph), epsilon = 1e-2);
         Ok(())
@@ -552,7 +552,7 @@ mod tests {
 
     #[test]
     fn compute_global_error_correct_dlr() -> Result<(), Box<dyn Error>> {
-        let filename = "dataset/new_slam_course/dlr.g2o";
+        let filename = "dataset/g2o/dlr.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
         approx::assert_abs_diff_eq!(37338.21, compute_global_error(&graph), epsilon = 1e-2);
         Ok(())
@@ -560,7 +560,7 @@ mod tests {
 
     #[test]
     fn linearize_pose_pose_constraint_correct() -> Result<(), Box<dyn Error>> {
-        let filename = "dataset/new_slam_course/simulation-pose-landmark.g2o";
+        let filename = "dataset/g2o/simulation-pose-landmark.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
 
         match &graph.edges[0] {
@@ -615,7 +615,7 @@ mod tests {
 
     #[test]
     fn linearize_pose_landmark_constraint_correct() -> Result<(), Box<dyn Error>> {
-        let filename = "dataset/new_slam_course/simulation-pose-landmark.g2o";
+        let filename = "dataset/g2o/simulation-pose-landmark.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
 
         match &graph.edges[1] {
@@ -644,7 +644,7 @@ mod tests {
 
     #[test]
     fn linearize_and_solve_correct() -> Result<(), Box<dyn Error>> {
-        let filename = "dataset/new_slam_course/simulation-pose-landmark.g2o";
+        let filename = "dataset/g2o/simulation-pose-landmark.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
         let dx = graph.linearize_and_solve()?;
         let expected_first_5 = DVector::<f64>::from_vec(vec![

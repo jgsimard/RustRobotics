@@ -165,8 +165,8 @@ impl<'a> Iterator for UtiasDatasetIteratorRef<'a> {
 impl UtiasDataset {
     pub fn new(dataset: i32) -> Result<UtiasDataset, Box<dyn Error>> {
         let base = match dataset {
-            0 => "dataset/dataset0",
-            1 => "dataset/dataset1",
+            0 => "dataset/utias0",
+            1 => "dataset/utias1",
             _ => panic!("dataset {dataset} not supported"),
         };
 
