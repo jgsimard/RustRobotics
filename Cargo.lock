@@ -1281,7 +1281,7 @@ checksum = "f162c6dd7b008981e4d40210aca20b4bd0f9b60ca9271061b07f78537722f2e1"
 
 [[package]]
 name = "robotics"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "approx",
  "criterion 0.4.0",
