@@ -8,7 +8,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // let filename = "dataset/new_slam_course/dlr.g2o";
     // let filename = "dataset/new_slam_course/intel.g2o";
     let mut graph = PoseGraph::from_g2o_file(filename)?;
-    graph.optimize(5)?;
+    graph.optimize(50)?;
     graph.plot();
     Ok(())
 }

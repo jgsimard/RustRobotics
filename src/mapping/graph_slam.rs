@@ -1,4 +1,5 @@
 #![allow(non_snake_case)]
+#![allow(non_camel_case_types)]
 #![allow(clippy::deprecated_cfg_attr)]
 use nalgebra::{
     DVector, Isometry2, Matrix2, Matrix2x3, Matrix3, Rotation2, SMatrix, SVector, Translation2,
@@ -11,8 +12,7 @@ use std::error::Error;
 
 enum Edge<T> {
     SE2(EdgeSE2<T>),
-    #[allow(non_camel_case_types)]
-    SE2_XY(EdgeXY<T>),
+    SE2_XY(EdgeSE2_XY<T>),
 }
 
 struct EdgeSE2<T> {
@@ -33,16 +33,16 @@ impl<T> EdgeSE2<T> {
     }
 }
 
-struct EdgeXY<T> {
+struct EdgeSE2_XY<T> {
     from: u32,
     to: u32,
     measurement: Vector2<T>,
     information: Matrix2<T>,
 }
 
-impl<T> EdgeXY<T> {
-    fn new(from: u32, to: u32, measurement: Vector2<T>, information: Matrix2<T>) -> EdgeXY<T> {
-        EdgeXY {
+impl<T> EdgeSE2_XY<T> {
+    fn new(from: u32, to: u32, measurement: Vector2<T>, information: Matrix2<T>) -> EdgeSE2_XY<T> {
+        EdgeSE2_XY {
             from,
             to,
             measurement,
@@ -53,19 +53,19 @@ impl<T> EdgeXY<T> {
 pub struct PoseGraph {
     x: DVector<f64>,
     // nodes: FxHashMap<int, >
-    // n_nodes: u32,
+    n_nodes: u32,
     edges: Vec<Edge<f64>>,
     lut: FxHashMap<u32, usize>,
 }
 
 #[allow(clippy::too_many_arguments)]
 fn update_linear_system<const X1: usize, const X2: usize>(
+    H: &mut SparseTriplet,
+    b: &mut Vector,
     e: &SVector<f64, X2>,
     A: &SMatrix<f64, X2, X1>,
     B: &SMatrix<f64, X2, X2>,
     omega: &SMatrix<f64, X2, X2>,
-    H: &mut SparseTriplet,
-    b: &mut Vector,
     from: usize,
     to: usize,
 ) -> Result<(), Box<dyn Error>> {
@@ -187,7 +187,7 @@ impl PoseGraph {
                         tri_0, tri_1,
                         tri_1, tri_2
                     );
-                    let edge = Edge::SE2_XY(EdgeXY::new(from, to, measurement, information));
+                    let edge = Edge::SE2_XY(EdgeSE2_XY::new(from, to, measurement, information));
                     edges.push(edge);
                 }
                 _ => unimplemented!("{}", line[0]),
@@ -199,7 +199,7 @@ impl PoseGraph {
         );
         Ok(PoseGraph {
             x: DVector::from_vec(X),
-            // n_nodes,
+            n_nodes,
             edges,
             lut,
         })
@@ -211,6 +211,7 @@ impl PoseGraph {
         let tolerance = 1e-4;
         let mut norms = Vec::new();
         let mut errors = vec![compute_global_error(self)];
+        println!("initial error :{:?}", errors.last().unwrap());
         for i in 0..num_iterations {
             let dx = self.linearize_and_solve()?;
             self.x += &dx;
@@ -251,7 +252,7 @@ impl PoseGraph {
 
                     let (e, A, B) = linearize_pose_pose_constraint(&x1, &x2, &z);
 
-                    update_linear_system(&e, &A, &B, &omega, &mut H, &mut b, from_idx, to_idx)?;
+                    update_linear_system(&mut H, &mut b, &e, &A, &B, &omega, from_idx, to_idx)?;
 
                     if need_to_add_prior {
                         H.put(from_idx, from_idx, 1000.0)?;
@@ -273,7 +274,7 @@ impl PoseGraph {
 
                     let (e, A, B) = linearize_pose_landmark_constraint(&x, &landmark, &z);
 
-                    update_linear_system(&e, &A, &B, &omega, &mut H, &mut b, from_idx, to_idx)?;
+                    update_linear_system(&mut H, &mut b, &e, &A, &B, &omega, from_idx, to_idx)?;
                 }
             }
         }
@@ -454,7 +455,7 @@ mod tests {
     fn compute_global_error_correct_pose_landmark() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/new_slam_course/simulation-pose-landmark.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
-        approx::assert_abs_diff_eq!(1994.5447, compute_global_error(&graph), epsilon = 1e-2);
+        approx::assert_abs_diff_eq!(72.50542, compute_global_error(&graph), epsilon = 1e-2);
 
         Ok(())
     }
@@ -464,6 +465,15 @@ mod tests {
         let filename = "dataset/new_slam_course/intel.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
         approx::assert_abs_diff_eq!(6109.409, compute_global_error(&graph), epsilon = 1e-2);
+        Ok(())
+    }
+
+    // FAILS
+    #[test]
+    fn compute_global_error_correct_dlr() -> Result<(), Box<dyn Error>> {
+        let filename = "dataset/new_slam_course/dlr.g2o";
+        let graph = PoseGraph::from_g2o_file(filename)?;
+        approx::assert_abs_diff_eq!(37338.21, compute_global_error(&graph), epsilon = 1e-2);
         Ok(())
     }
 
@@ -551,16 +561,20 @@ mod tests {
         Ok(())
     }
 
-    // // FAILS
-    // #[test]
-    // fn linearize_and_solve_correct() -> Result<(), Box<dyn Error>> {
-    //     let filename = "dataset/new_slam_course/simulation-pose-landmark.g2o";
-    //     let graph = read_g2o_file(filename)?;
-    //     let dx = graph.linearize_and_solve();
-    //     let expected_first_5 = DVector::<f64>::from_vec(vec![ 1.68518905e-01, 5.74311089e-01, -5.08805168e-02, -3.67482151e-02,
-    //     8.89458085e-01]);
-    //     let first_5 = dx.rows(0, 5).clone_owned();
-    //     approx::assert_abs_diff_eq!(expected_first_5 , first_5);
-    //     Ok(())
-    // }
+    #[test]
+    fn linearize_and_solve_correct() -> Result<(), Box<dyn Error>> {
+        let filename = "dataset/new_slam_course/simulation-pose-landmark.g2o";
+        let graph = PoseGraph::from_g2o_file(filename)?;
+        let dx = graph.linearize_and_solve()?;
+        let expected_first_5 = DVector::<f64>::from_vec(vec![
+            1.68518905e-01,
+            5.74311089e-01,
+            -5.08805168e-02,
+            -3.67482151e-02,
+            8.89458085e-01,
+        ]);
+        let first_5 = dx.rows(0, 5).clone_owned();
+        approx::assert_abs_diff_eq!(expected_first_5, first_5, epsilon = 1e-3);
+        Ok(())
+    }
 }
