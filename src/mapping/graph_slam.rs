@@ -58,6 +58,37 @@ pub struct PoseGraph {
     lut: FxHashMap<u32, usize>,
 }
 
+#[allow(clippy::too_many_arguments)]
+fn update_linear_system<const X1: usize, const X2: usize>(
+    e: &SVector<f64, X2>,
+    A: &SMatrix<f64, X2, X1>,
+    B: &SMatrix<f64, X2, X2>,
+    omega: &SMatrix<f64, X2, X2>,
+    H: &mut SparseTriplet,
+    b: &mut Vector,
+    from: usize,
+    to: usize,
+) -> Result<(), Box<dyn Error>> {
+    // Compute jacobians
+    let H_ii = A.transpose() * omega * A;
+    let H_ij = A.transpose() * omega * B;
+    let H_ji = H_ij.transpose();
+    let H_jj = B.transpose() * omega * B;
+
+    let b_i = A.transpose() * omega * e;
+    let b_j = B.transpose() * omega * e;
+
+    // Update the linear system
+    set_matrix(H, from, from, &H_ii)?;
+    set_matrix(H, from, to, &H_ij)?;
+    set_matrix(H, to, from, &H_ji)?;
+    set_matrix(H, to, to, &H_jj)?;
+
+    set_vector(b, from, &b_i);
+    set_vector(b, to, &b_j);
+    Ok(())
+}
+
 fn set_matrix<const R: usize, const C: usize>(
     trip: &mut SparseTriplet,
     i: usize,
@@ -220,21 +251,7 @@ impl PoseGraph {
 
                     let (e, A, B) = linearize_pose_pose_constraint(&x1, &x2, &z);
 
-                    let b_i = A.transpose() * omega * e;
-                    let b_j = B.transpose() * omega * e;
-
-                    let H_ii = A.transpose() * omega * A;
-                    let H_ij = A.transpose() * omega * B;
-                    let H_ji = H_ij.transpose();
-                    let H_jj = B.transpose() * omega * B;
-
-                    set_matrix(&mut H, from_idx, from_idx, &H_ii)?;
-                    set_matrix(&mut H, from_idx, to_idx, &H_ij)?;
-                    set_matrix(&mut H, to_idx, from_idx, &H_ji)?;
-                    set_matrix(&mut H, to_idx, to_idx, &H_jj)?;
-
-                    set_vector(&mut b, from_idx, &b_i);
-                    set_vector(&mut b, to_idx, &b_j);
+                    update_linear_system(&e, &A, &B, &omega, &mut H, &mut b, from_idx, to_idx)?;
 
                     if need_to_add_prior {
                         H.put(from_idx, from_idx, 1000.0)?;
@@ -256,21 +273,7 @@ impl PoseGraph {
 
                     let (e, A, B) = linearize_pose_landmark_constraint(&x, &landmark, &z);
 
-                    let b_i = A.transpose() * omega * e;
-                    let b_j = B.transpose() * omega * e;
-
-                    let H_ii = A.transpose() * omega * A;
-                    let H_ij = A.transpose() * omega * B;
-                    let H_ji = H_ij.transpose();
-                    let H_jj = B.transpose() * omega * B;
-
-                    set_matrix(&mut H, from_idx, from_idx, &H_ii)?;
-                    set_matrix(&mut H, from_idx, to_idx, &H_ij)?;
-                    set_matrix(&mut H, to_idx, from_idx, &H_ji)?;
-                    set_matrix(&mut H, to_idx, to_idx, &H_jj)?;
-
-                    set_vector(&mut b, from_idx, &b_i);
-                    set_vector(&mut b, to_idx, &b_j);
+                    update_linear_system(&e, &A, &B, &omega, &mut H, &mut b, from_idx, to_idx)?;
                 }
             }
         }
