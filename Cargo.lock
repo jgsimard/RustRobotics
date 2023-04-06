@@ -1001,6 +1001,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
 
 [[package]]
+name = "plotpy"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa0fad9eb029657b4991f0373479ab95b58c8214e3ecd1f41e9d5a95dde22a01"
+dependencies = [
+ "russell_chk",
+ "russell_lab",
+]
+
+[[package]]
 name = "plotters"
 version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1278,6 +1288,7 @@ dependencies = [
  "csv",
  "nalgebra",
  "numpy",
+ "plotpy",
  "plotters",
  "pyo3",
  "rand",

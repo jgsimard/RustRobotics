@@ -5,16 +5,19 @@ use nalgebra::{
     DVector, Isometry2, Matrix2, Matrix2x3, Matrix3, Rotation2, SMatrix, SVector, Translation2,
     Vector2, Vector3,
 };
+use plotpy::{Curve, Plot};
 use russell_lab::Vector;
 use russell_sparse::{ConfigSolver, Solver, SparseTriplet, Symmetry};
 use rustc_hash::FxHashMap;
 use std::error::Error;
 
+#[derive(Debug)]
 enum Edge<T> {
     SE2(EdgeSE2<T>),
     SE2_XY(EdgeSE2_XY<T>),
 }
 
+#[derive(Debug)]
 struct EdgeSE2<T> {
     from: u32,
     to: u32,
@@ -33,6 +36,7 @@ impl<T> EdgeSE2<T> {
     }
 }
 
+#[derive(Debug)]
 struct EdgeSE2_XY<T> {
     from: u32,
     to: u32,
@@ -50,12 +54,19 @@ impl<T> EdgeSE2_XY<T> {
         }
     }
 }
+
+#[derive(PartialEq)]
+enum Node {
+    SE2,
+    XY,
+}
 pub struct PoseGraph {
     x: DVector<f64>,
-    // nodes: FxHashMap<int, >
-    n_nodes: u32,
+    nodes: FxHashMap<u32, Node>,
     edges: Vec<Edge<f64>>,
     lut: FxHashMap<u32, usize>,
+    iteration: usize,
+    name: String,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -113,8 +124,7 @@ impl PoseGraph {
     pub fn from_g2o_file(filename: &str) -> Result<PoseGraph, Box<dyn Error>> {
         let mut edges = Vec::new();
         let mut lut = FxHashMap::default();
-        // let mut nodes = FxHashMap::default();
-        let mut n_nodes = 0;
+        let mut nodes = FxHashMap::default();
         let mut offset = 0;
         let mut X = Vec::new();
 
@@ -126,7 +136,7 @@ impl PoseGraph {
                     let x = line[2].parse::<f64>()?;
                     let y = line[3].parse::<f64>()?;
                     let angle = line[4].parse::<f64>()?;
-                    n_nodes += 1;
+                    nodes.insert(id, Node::SE2);
                     lut.insert(id, offset);
                     offset += 3;
                     X.push(x);
@@ -137,7 +147,7 @@ impl PoseGraph {
                     let id = line[1].parse::<u32>()?;
                     let x = line[2].parse::<f64>()?;
                     let y = line[3].parse::<f64>()?;
-                    n_nodes += 1;
+                    nodes.insert(id, Node::XY);
                     lut.insert(id, offset);
                     offset += 2;
                     X.push(x);
@@ -194,25 +204,95 @@ impl PoseGraph {
             }
         }
         println!(
-            "Loaded graph with {n_nodes} nodes and {} edges",
+            "Loaded graph with {} nodes and {} edges",
+            nodes.len(),
             edges.len()
         );
         Ok(PoseGraph {
             x: DVector::from_vec(X),
-            n_nodes,
+            nodes,
             edges,
             lut,
+            iteration: 0,
+            name: filename
+                .split('/')
+                .last()
+                .unwrap()
+                .split('.')
+                .next()
+                .unwrap()
+                .to_string(),
         })
     }
 
-    pub fn plot(&self) {}
+    pub fn plot(&self) -> Result<(), Box<dyn Error>> {
+        // poses + landarks
+        let mut landmarks_present = false;
+        let mut poses_seq = Vec::new();
+        let mut poses = Curve::new();
+        poses
+            .set_line_style("None")
+            .set_marker_color("b")
+            .set_marker_style("o");
 
-    pub fn optimize(&mut self, num_iterations: usize) -> Result<(), Box<dyn Error>> {
+        let mut landmarks = Curve::new();
+        landmarks
+            .set_line_style("None")
+            .set_marker_color("r")
+            .set_marker_style("*");
+        poses.points_begin();
+        landmarks.points_begin();
+        for (id, node) in self.nodes.iter() {
+            let idx = *self.lut.get(id).unwrap();
+            let xy = self.x.fixed_rows::<2>(idx);
+            match *node {
+                Node::SE2 => {
+                    poses.points_add(xy.x, xy.y);
+                    poses_seq.push((id, xy));
+                }
+                Node::XY => {
+                    landmarks.points_add(xy.x, xy.y);
+                    landmarks_present = true;
+                }
+            }
+        }
+        poses.points_end();
+        landmarks.points_end();
+
+        poses_seq.sort_by(|a, b| (a.0).partial_cmp(b.0).unwrap());
+        let mut poses_seq_curve = Curve::new();
+        poses_seq_curve.set_line_color("r");
+
+        poses_seq_curve.points_begin();
+        for (_, p) in poses_seq {
+            poses_seq_curve.points_add(p.x, p.y);
+        }
+        poses_seq_curve.points_end();
+
+        // add features to plot
+        let mut plot = Plot::new();
+
+        plot.add(&poses).add(&poses_seq_curve);
+        if landmarks_present {
+            plot.add(&landmarks);
+        }
+        // save figure
+        plot.set_equal_axes(true)
+            // .set_figure_size_points(600.0, 600.0)
+            .save(format!("img/{}-{}.svg", self.name, self.iteration).as_str())?;
+        Ok(())
+    }
+
+    pub fn optimize(&mut self, num_iterations: usize, plot: bool) -> Result<(), Box<dyn Error>> {
         let tolerance = 1e-4;
         let mut norms = Vec::new();
         let mut errors = vec![compute_global_error(self)];
         println!("initial error :{:?}", errors.last().unwrap());
+        if plot {
+            self.plot()?;
+        }
         for i in 0..num_iterations {
+            self.iteration += 1;
             let dx = self.linearize_and_solve()?;
             self.x += &dx;
             let norm_dx = dx.norm();
@@ -221,6 +301,9 @@ impl PoseGraph {
 
             println!("|dx| for step {i} : {norm_dx}");
             println!("errors :{:?}", errors.last().unwrap());
+            if plot {
+                self.plot()?;
+            }
 
             if norm_dx < tolerance {
                 break;
@@ -417,25 +500,25 @@ mod tests {
     fn read_g2o_file_runs() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/new_slam_course/simulation-pose-pose.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
-        assert_eq!(400, graph.n_nodes);
+        assert_eq!(400, graph.nodes.len());
         assert_eq!(1773, graph.edges.len());
         assert_eq!(1200, graph.x.shape().0);
 
         let filename = "dataset/new_slam_course/simulation-pose-landmark.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
-        assert_eq!(77, graph.n_nodes);
+        assert_eq!(77, graph.nodes.len());
         assert_eq!(297, graph.edges.len());
         assert_eq!(195, graph.x.shape().0);
 
         let filename = "dataset/new_slam_course/intel.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
-        assert_eq!(1728, graph.n_nodes);
+        assert_eq!(1728, graph.nodes.len());
         assert_eq!(4830, graph.edges.len());
         assert_eq!(5184, graph.x.shape().0);
 
         let filename = "dataset/new_slam_course/dlr.g2o";
         let graph = PoseGraph::from_g2o_file(filename)?;
-        assert_eq!(3873, graph.n_nodes);
+        assert_eq!(3873, graph.nodes.len());
         assert_eq!(17605, graph.edges.len());
         assert_eq!(11043, graph.x.shape().0);
         Ok(())
