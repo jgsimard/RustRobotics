@@ -351,7 +351,7 @@ fn linearize_pose_landmark_constraint(
 
     let a_1 = -x.rotation.to_rotation_matrix().transpose().matrix();
     let xrd = deriv * *x.rotation.to_rotation_matrix().matrix();
-    let a_2 = xrd * (landmark - x.translation.vector);
+    let a_2 = xrd.transpose() * (landmark - x.translation.vector);
 
     #[cfg_attr(rustfmt, rustfmt_skip)]
     let A = Matrix2x3::new(
