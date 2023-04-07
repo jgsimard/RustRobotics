@@ -12,13 +12,13 @@ use rustc_hash::FxHashMap;
 use std::error::Error;
 
 #[derive(Debug)]
-enum Edge<T> {
+pub enum Edge<T> {
     SE2(EdgeSE2<T>),
     SE2_XY(EdgeSE2_XY<T>),
 }
 
 #[derive(Debug)]
-struct EdgeSE2<T> {
+pub struct EdgeSE2<T> {
     from: u32,
     to: u32,
     measurement: Isometry2<T>,
@@ -26,7 +26,12 @@ struct EdgeSE2<T> {
 }
 
 impl<T> EdgeSE2<T> {
-    fn new(from: u32, to: u32, measurement: Isometry2<T>, information: Matrix3<T>) -> EdgeSE2<T> {
+    pub fn new(
+        from: u32,
+        to: u32,
+        measurement: Isometry2<T>,
+        information: Matrix3<T>,
+    ) -> EdgeSE2<T> {
         EdgeSE2 {
             from,
             to,
@@ -37,7 +42,7 @@ impl<T> EdgeSE2<T> {
 }
 
 #[derive(Debug)]
-struct EdgeSE2_XY<T> {
+pub struct EdgeSE2_XY<T> {
     from: u32,
     to: u32,
     measurement: Vector2<T>,
@@ -45,7 +50,12 @@ struct EdgeSE2_XY<T> {
 }
 
 impl<T> EdgeSE2_XY<T> {
-    fn new(from: u32, to: u32, measurement: Vector2<T>, information: Matrix2<T>) -> EdgeSE2_XY<T> {
+    pub fn new(
+        from: u32,
+        to: u32,
+        measurement: Vector2<T>,
+        information: Matrix2<T>,
+    ) -> EdgeSE2_XY<T> {
         EdgeSE2_XY {
             from,
             to,
@@ -56,7 +66,7 @@ impl<T> EdgeSE2_XY<T> {
 }
 
 #[derive(PartialEq)]
-enum Node {
+pub enum Node {
     SE2,
     XY,
 }
@@ -121,7 +131,24 @@ fn set_vector<const D: usize>(v: &mut Vector, i: usize, source: &SVector<f64, D>
 }
 
 impl PoseGraph {
-    pub fn from_g2o_file(filename: &str) -> Result<PoseGraph, Box<dyn Error>> {
+    pub fn new(
+        x: DVector<f64>,
+        nodes: FxHashMap<u32, Node>,
+        edges: Vec<Edge<f64>>,
+        lut: FxHashMap<u32, usize>,
+        name: String,
+    ) -> PoseGraph {
+        PoseGraph {
+            x,
+            nodes,
+            edges,
+            lut,
+            iteration: 0,
+            name,
+        }
+    }
+
+    pub fn from_g2o(filename: &str) -> Result<PoseGraph, Box<dyn Error>> {
         let mut edges = Vec::new();
         let mut lut = FxHashMap::default();
         let mut nodes = FxHashMap::default();
@@ -152,6 +179,9 @@ impl PoseGraph {
                     offset += 2;
                     X.push(x);
                     X.push(y);
+                }
+                "VERTEX_SE3:QUAT" => {
+                    unimplemented!("VERTEX_SE3:QUAT")
                 }
                 "EDGE_SE2" => {
                     let from = line[1].parse::<u32>()?;
@@ -200,6 +230,9 @@ impl PoseGraph {
                     let edge = Edge::SE2_XY(EdgeSE2_XY::new(from, to, measurement, information));
                     edges.push(edge);
                 }
+                "EDGE_SE3:QUAT" => {
+                    unimplemented!("EDGE_SE3:QUAT")
+                }
                 _ => unimplemented!("{}", line[0]),
             }
         }
@@ -208,21 +241,112 @@ impl PoseGraph {
             nodes.len(),
             edges.len()
         );
-        Ok(PoseGraph {
-            x: DVector::from_vec(X),
+        let name = filename
+            .split('/')
+            .last()
+            .unwrap()
+            .split('.')
+            .next()
+            .unwrap()
+            .to_string();
+        Ok(PoseGraph::new(
+            DVector::from_vec(X),
             nodes,
             edges,
             lut,
-            iteration: 0,
-            name: filename
-                .split('/')
-                .last()
-                .unwrap()
-                .split('.')
-                .next()
-                .unwrap()
-                .to_string(),
-        })
+            name,
+        ))
+    }
+
+    pub fn optimize(&mut self, num_iterations: usize, plot: bool) -> Result<(), Box<dyn Error>> {
+        let tolerance = 1e-4;
+        let mut norms = Vec::new();
+        let mut errors = vec![compute_global_error(self)];
+        println!("initial error :{:?}", errors.last().unwrap());
+        if plot {
+            self.plot()?;
+        }
+        for i in 0..num_iterations {
+            self.iteration += 1;
+            let dx = self.linearize_and_solve()?;
+            self.x += &dx;
+            let norm_dx = dx.norm();
+            norms.push(norm_dx);
+            errors.push(compute_global_error(self));
+
+            println!("|dx| for step {i} : {norm_dx}");
+            println!("errors :{:?}", errors.last().unwrap());
+            if plot {
+                self.plot()?;
+            }
+
+            if norm_dx < tolerance {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    fn linearize_and_solve(&self) -> Result<DVector<f64>, Box<dyn Error>> {
+        let n = self.x.shape().0;
+
+        let mut H = SparseTriplet::new(n, n, n * n, Symmetry::General).unwrap();
+        let mut b = Vector::new(n);
+
+        let mut need_to_add_prior = true;
+
+        // make linear system
+        for edge in &self.edges {
+            match edge {
+                Edge::SE2(edge) => {
+                    let from_idx = *self.lut.get(&edge.from).unwrap();
+                    let to_idx = *self.lut.get(&edge.to).unwrap();
+
+                    let x1 = isometry(&self.x, from_idx);
+                    let x2 = isometry(&self.x, to_idx);
+
+                    let z = edge.measurement;
+                    let omega = edge.information;
+
+                    let e = pose_pose_constraint(&x1, &x2, &z);
+                    let (A, B) = linearize_pose_pose_constraint(&x1, &x2, &z);
+
+                    update_linear_system(&mut H, &mut b, &e, &A, &B, &omega, from_idx, to_idx)?;
+
+                    if need_to_add_prior {
+                        H.put(from_idx, from_idx, 1000.0)?;
+                        H.put(from_idx + 1, from_idx + 1, 1000.0)?;
+                        H.put(from_idx + 2, from_idx + 2, 1000.0)?;
+
+                        need_to_add_prior = false;
+                    }
+                }
+                Edge::SE2_XY(edge) => {
+                    let from_idx = *self.lut.get(&edge.from).unwrap();
+                    let to_idx = *self.lut.get(&edge.to).unwrap();
+
+                    let x = isometry(&self.x, from_idx);
+                    let landmark = self.x.fixed_rows::<2>(to_idx).into();
+
+                    let z = edge.measurement;
+                    let omega = edge.information;
+
+                    let e = pose_landmark_constraint(&x, &landmark, &z);
+                    let (A, B) = linearize_pose_landmark_constraint(&x, &landmark);
+
+                    update_linear_system(&mut H, &mut b, &e, &A, &B, &omega, from_idx, to_idx)?;
+                }
+            }
+        }
+        // Use Russell Sparse because it is much faster then nalgebra_sparse
+        b.map(|x| -x);
+        let mut solution = Vector::new(n);
+        let config = ConfigSolver::new();
+        let mut solver = Solver::new(config)?;
+        solver.initialize(&H)?;
+        solver.factorize()?;
+        solver.solve(&mut solution, &b)?;
+        Ok(DVector::from_vec(solution.as_data().clone()))
     }
 
     pub fn plot(&self) -> Result<(), Box<dyn Error>> {
@@ -282,103 +406,19 @@ impl PoseGraph {
             .save(format!("img/{}-{}.svg", self.name, self.iteration).as_str())?;
         Ok(())
     }
-
-    pub fn optimize(&mut self, num_iterations: usize, plot: bool) -> Result<(), Box<dyn Error>> {
-        let tolerance = 1e-4;
-        let mut norms = Vec::new();
-        let mut errors = vec![compute_global_error(self)];
-        println!("initial error :{:?}", errors.last().unwrap());
-        if plot {
-            self.plot()?;
-        }
-        for i in 0..num_iterations {
-            self.iteration += 1;
-            let dx = self.linearize_and_solve()?;
-            self.x += &dx;
-            let norm_dx = dx.norm();
-            norms.push(norm_dx);
-            errors.push(compute_global_error(self));
-
-            println!("|dx| for step {i} : {norm_dx}");
-            println!("errors :{:?}", errors.last().unwrap());
-            if plot {
-                self.plot()?;
-            }
-
-            if norm_dx < tolerance {
-                break;
-            }
-        }
-        Ok(())
-    }
-
-    fn linearize_and_solve(&self) -> Result<DVector<f64>, Box<dyn Error>> {
-        let n = self.x.shape().0;
-
-        let mut H = SparseTriplet::new(n, n, n * n, Symmetry::General).unwrap();
-        let mut b = Vector::new(n);
-
-        let mut need_to_add_prior = true;
-
-        // make linear system
-        for edge in &self.edges {
-            match edge {
-                Edge::SE2(edge) => {
-                    let from_idx = *self.lut.get(&edge.from).unwrap();
-                    let to_idx = *self.lut.get(&edge.to).unwrap();
-
-                    let x1 = isometry(&self.x, from_idx);
-                    let x2 = isometry(&self.x, to_idx);
-
-                    let z = edge.measurement;
-                    let omega = edge.information;
-
-                    let (e, A, B) = linearize_pose_pose_constraint(&x1, &x2, &z);
-
-                    update_linear_system(&mut H, &mut b, &e, &A, &B, &omega, from_idx, to_idx)?;
-
-                    if need_to_add_prior {
-                        H.put(from_idx, from_idx, 1000.0)?;
-                        H.put(from_idx + 1, from_idx + 1, 1000.0)?;
-                        H.put(from_idx + 2, from_idx + 2, 1000.0)?;
-
-                        need_to_add_prior = false;
-                    }
-                }
-                Edge::SE2_XY(edge) => {
-                    let from_idx = *self.lut.get(&edge.from).unwrap();
-                    let to_idx = *self.lut.get(&edge.to).unwrap();
-
-                    let x = isometry(&self.x, from_idx);
-                    let landmark = self.x.fixed_rows::<2>(to_idx).into();
-
-                    let z = edge.measurement;
-                    let omega = edge.information;
-
-                    let (e, A, B) = linearize_pose_landmark_constraint(&x, &landmark, &z);
-
-                    update_linear_system(&mut H, &mut b, &e, &A, &B, &omega, from_idx, to_idx)?;
-                }
-            }
-        }
-        // Use Russell Sparse because it is much faster then nalgebra_sparse
-        b.map(|x| -x);
-        let mut solution = Vector::new(n);
-        let config = ConfigSolver::new();
-        let mut solver = Solver::new(config)?;
-        solver.initialize(&H)?;
-        solver.factorize()?;
-        solver.solve(&mut solution, &b)?;
-        Ok(DVector::from_vec(solution.as_data().clone()))
-    }
 }
 
 fn pose_pose_constraint(
     x1: &Isometry2<f64>,
     x2: &Isometry2<f64>,
     z: &Isometry2<f64>,
-) -> Isometry2<f64> {
-    z.inverse() * x1.inverse() * x2
+) -> Vector3<f64> {
+    let constraint = z.inverse() * x1.inverse() * x2;
+    Vector3::new(
+        constraint.translation.x,
+        constraint.translation.y,
+        constraint.rotation.angle(),
+    )
 }
 
 fn pose_landmark_constraint(
@@ -393,11 +433,7 @@ fn linearize_pose_pose_constraint(
     x1: &Isometry2<f64>,
     x2: &Isometry2<f64>,
     z: &Isometry2<f64>,
-) -> (Vector3<f64>, Matrix3<f64>, Matrix3<f64>) {
-    let e_ = pose_pose_constraint(x1, x2, z);
-    let e = Vector3::new(e_.translation.x, e_.translation.y, e_.rotation.angle());
-
-    // let minus1 = f64::from_f32(-1.0).unwrap();
+) -> (Matrix3<f64>, Matrix3<f64>) {
     let deriv = Matrix2::<f64>::new(0.0, -1.0, 1.0, 0.0);
 
     let zr = z.rotation.to_rotation_matrix();
@@ -421,16 +457,13 @@ fn linearize_pose_pose_constraint(
         b_11.m21, b_11.m22, 0.0,
         0.0, 0.0, 1.0,
     );
-    (e, A, B)
+    (A, B)
 }
 
 fn linearize_pose_landmark_constraint(
     x: &Isometry2<f64>,
     landmark: &Vector2<f64>,
-    z: &Vector2<f64>,
-) -> (Vector2<f64>, Matrix2x3<f64>, Matrix2<f64>) {
-    let e = pose_landmark_constraint(x, landmark, z);
-
+) -> (Matrix2x3<f64>, Matrix2<f64>) {
     let deriv = Matrix2::<f64>::new(0.0, -1.0, 1.0, 0.0);
 
     let a_1 = -x.rotation.to_rotation_matrix().transpose().matrix();
@@ -445,7 +478,7 @@ fn linearize_pose_landmark_constraint(
 
     let B = *x.rotation.to_rotation_matrix().transpose().matrix();
 
-    (e, A, B)
+    (A, B)
 }
 
 fn isometry(x: &DVector<f64>, idx: usize) -> Isometry2<f64> {
@@ -453,7 +486,6 @@ fn isometry(x: &DVector<f64>, idx: usize) -> Isometry2<f64> {
     Isometry2::from_parts(Translation2::new(p.x, p.y), Rotation2::new(p.z).into())
 }
 
-// TODO : Fixe pose-landmark : bad tests
 fn compute_global_error(graph: &PoseGraph) -> f64 {
     let mut error = 0.0;
     for edge in &graph.edges {
@@ -467,14 +499,7 @@ fn compute_global_error(graph: &PoseGraph) -> f64 {
 
                 let z = e.measurement;
 
-                let constraint = pose_pose_constraint(&x1, &x2, &z);
-                let error_vec = Vector3::new(
-                    constraint.translation.x,
-                    constraint.translation.y,
-                    constraint.rotation.angle(),
-                );
-
-                error += error_vec.norm();
+                error += pose_pose_constraint(&x1, &x2, &z).norm();
             }
             Edge::SE2_XY(e) => {
                 let from_idx = *graph.lut.get(&e.from).unwrap();
@@ -499,25 +524,25 @@ mod tests {
     #[test]
     fn read_g2o_file_runs() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-pose.g2o";
-        let graph = PoseGraph::from_g2o_file(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
         assert_eq!(400, graph.nodes.len());
         assert_eq!(1773, graph.edges.len());
         assert_eq!(1200, graph.x.shape().0);
 
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let graph = PoseGraph::from_g2o_file(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
         assert_eq!(77, graph.nodes.len());
         assert_eq!(297, graph.edges.len());
         assert_eq!(195, graph.x.shape().0);
 
         let filename = "dataset/g2o/intel.g2o";
-        let graph = PoseGraph::from_g2o_file(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
         assert_eq!(1728, graph.nodes.len());
         assert_eq!(4830, graph.edges.len());
         assert_eq!(5184, graph.x.shape().0);
 
         let filename = "dataset/g2o/dlr.g2o";
-        let graph = PoseGraph::from_g2o_file(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
         assert_eq!(3873, graph.nodes.len());
         assert_eq!(17605, graph.edges.len());
         assert_eq!(11043, graph.x.shape().0);
@@ -527,7 +552,7 @@ mod tests {
     #[test]
     fn compute_global_error_correct_pose_pose() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-pose.g2o";
-        let graph = PoseGraph::from_g2o_file(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
         approx::assert_abs_diff_eq!(3558.0723, compute_global_error(&graph), epsilon = 1e-2);
 
         Ok(())
@@ -536,7 +561,7 @@ mod tests {
     #[test]
     fn compute_global_error_correct_pose_landmark() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let graph = PoseGraph::from_g2o_file(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
         approx::assert_abs_diff_eq!(72.50542, compute_global_error(&graph), epsilon = 1e-2);
 
         Ok(())
@@ -545,7 +570,7 @@ mod tests {
     #[test]
     fn compute_global_error_correct_intel() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/intel.g2o";
-        let graph = PoseGraph::from_g2o_file(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
         approx::assert_abs_diff_eq!(6109.409, compute_global_error(&graph), epsilon = 1e-2);
         Ok(())
     }
@@ -553,7 +578,7 @@ mod tests {
     #[test]
     fn compute_global_error_correct_dlr() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/dlr.g2o";
-        let graph = PoseGraph::from_g2o_file(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
         approx::assert_abs_diff_eq!(37338.21, compute_global_error(&graph), epsilon = 1e-2);
         Ok(())
     }
@@ -561,7 +586,7 @@ mod tests {
     #[test]
     fn linearize_pose_pose_constraint_correct() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let graph = PoseGraph::from_g2o_file(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
 
         match &graph.edges[0] {
             Edge::SE2(e) => {
@@ -573,7 +598,8 @@ mod tests {
 
                 let z = e.measurement;
 
-                let (e, A, B) = linearize_pose_pose_constraint(&x1, &x2, &z);
+                let e = pose_pose_constraint(&x1, &x2, &z);
+                let (A, B) = linearize_pose_pose_constraint(&x1, &x2, &z);
 
                 let A_expected = Matrix3::new(0.0, 1.0, 0.113, -1., 0., 0.024, 0., 0., -1.);
 
@@ -596,7 +622,8 @@ mod tests {
 
                 let z = e.measurement;
 
-                let (e, A, B) = linearize_pose_pose_constraint(&x1, &x2, &z);
+                let e = pose_pose_constraint(&x1, &x2, &z);
+                let (A, B) = linearize_pose_pose_constraint(&x1, &x2, &z);
 
                 let A_expected =
                     Matrix3::new(0.037, 0.999, 0.138, -0.999, 0.037, -0.982, 0., 0., -1.);
@@ -616,19 +643,20 @@ mod tests {
     #[test]
     fn linearize_pose_landmark_constraint_correct() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let graph = PoseGraph::from_g2o_file(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
 
         match &graph.edges[1] {
             Edge::SE2(_) => panic!(),
-            Edge::SE2_XY(e) => {
-                let from_idx = *graph.lut.get(&e.from).unwrap();
-                let to_idx = *graph.lut.get(&e.to).unwrap();
+            Edge::SE2_XY(edge) => {
+                let from_idx = *graph.lut.get(&edge.from).unwrap();
+                let to_idx = *graph.lut.get(&edge.to).unwrap();
 
                 let x = isometry(&graph.x, from_idx);
                 let landmark = graph.x.fixed_rows::<2>(to_idx);
-                let z = e.measurement;
+                let z = edge.measurement;
 
-                let (e, A, B) = linearize_pose_landmark_constraint(&x, &landmark.into(), &z);
+                let e = pose_landmark_constraint(&x, &landmark.into(), &z);
+                let (A, B) = linearize_pose_landmark_constraint(&x, &landmark.into());
 
                 let A_expected = Matrix2x3::new(0.0, 1.0, 0.358, -1., 0., -0.051);
 
@@ -645,7 +673,7 @@ mod tests {
     #[test]
     fn linearize_and_solve_correct() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let graph = PoseGraph::from_g2o_file(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
         let dx = graph.linearize_and_solve()?;
         let expected_first_5 = DVector::<f64>::from_vec(vec![
             1.68518905e-01,
