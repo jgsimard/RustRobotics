@@ -29,6 +29,7 @@ numpy = {version = "0.18", features = ["nalgebra"] }
 [dev-dependencies]
 criterion = "0.4"
 approx = "0.5"
+dialoguer = "0.10"
 
 [lib]
 name = "robotics"
