@@ -32,6 +32,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let plot = plot == 0;
 
     let mut graph = PoseGraph::from_g2o(filename)?;
-    graph.optimize(50, plot)?;
+    graph.optimize(50, true, plot)?;
     Ok(())
 }

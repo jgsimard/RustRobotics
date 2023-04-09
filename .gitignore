@@ -9,3 +9,9 @@ dataset/
 fleet.toml
 rust-toolchain.toml
 .vscode/
+
+# flamegraph 
+# https://superuser.com/questions/980632/run-perf-without-root-rights
+# sudo sh -c 'echo 1 >/proc/sys/kernel/perf_event_paranoid'
+perf.data
+flamegraph.svg

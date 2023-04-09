@@ -2,8 +2,8 @@
 #![allow(non_camel_case_types)]
 #![allow(clippy::deprecated_cfg_attr)]
 use nalgebra::{
-    DVector, Isometry2, Matrix2, Matrix2x3, Matrix3, Rotation2, SMatrix, SVector, Translation2,
-    Vector2, Vector3,
+    DVector, Isometry2, Matrix2, Matrix2x3, Matrix3, SMatrix, SVector, Translation2,
+    Vector2, Vector3, UnitComplex,
 };
 use plotpy::{Curve, Plot};
 use russell_lab::Vector;
@@ -15,6 +15,8 @@ use std::error::Error;
 pub enum Edge<T> {
     SE2(EdgeSE2<T>),
     SE2_XY(EdgeSE2_XY<T>),
+    SE3,
+    SE3_XYZ
 }
 
 #[derive(Debug)]
@@ -68,7 +70,9 @@ impl<T> EdgeSE2_XY<T> {
 #[derive(PartialEq)]
 pub enum Node {
     SE2,
+    SE3,
     XY,
+    XYZ
 }
 pub struct PoseGraph {
     x: DVector<f64>,
@@ -166,9 +170,7 @@ impl PoseGraph {
                     nodes.insert(id, Node::SE2);
                     lut.insert(id, offset);
                     offset += 3;
-                    X.push(x);
-                    X.push(y);
-                    X.push(angle);
+                    X.extend_from_slice(&[x, y, angle]);
                 }
                 "VERTEX_XY" => {
                     let id = line[1].parse::<u32>()?;
@@ -177,10 +179,17 @@ impl PoseGraph {
                     nodes.insert(id, Node::XY);
                     lut.insert(id, offset);
                     offset += 2;
-                    X.push(x);
-                    X.push(y);
+                    X.extend_from_slice(&[x, y]);
                 }
                 "VERTEX_SE3:QUAT" => {
+                    // let id = line[1].parse::<u32>()?;
+                    // let x = line[2].parse::<f64>()?;
+                    // let y = line[3].parse::<f64>()?;
+                    // let z = line[4].parse::<f64>()?;
+                    // let qx = line[5].parse::<f64>()?;
+                    // let qy = line[6].parse::<f64>()?;
+                    // let qz = line[7].parse::<f64>()?;
+                    // let qw = line[8].parse::<f64>()?;
                     unimplemented!("VERTEX_SE3:QUAT")
                 }
                 "EDGE_SE2" => {
@@ -197,8 +206,8 @@ impl PoseGraph {
                     let tri_5 = line[11].parse::<f64>()?;
 
                     let translation = Translation2::new(x, y);
-                    let rotation = Rotation2::new(angle);
-                    let measurement = Isometry2::from_parts(translation, rotation.into());
+                    let rotation = UnitComplex::from_angle(angle);
+                    let measurement = Isometry2::from_parts(translation, rotation);
 
                     #[allow(clippy::deprecated_cfg_attr)]
                     #[cfg_attr(rustfmt, rustfmt_skip)]
@@ -236,11 +245,6 @@ impl PoseGraph {
                 _ => unimplemented!("{}", line[0]),
             }
         }
-        println!(
-            "Loaded graph with {} nodes and {} edges",
-            nodes.len(),
-            edges.len()
-        );
         let name = filename
             .split('/')
             .last()
@@ -258,11 +262,23 @@ impl PoseGraph {
         ))
     }
 
-    pub fn optimize(&mut self, num_iterations: usize, plot: bool) -> Result<(), Box<dyn Error>> {
+    pub fn optimize(
+        &mut self,
+        num_iterations: usize,
+        log: bool,
+        plot: bool,
+    ) -> Result<(), Box<dyn Error>> {
         let tolerance = 1e-4;
         let mut norms = Vec::new();
         let mut errors = vec![compute_global_error(self)];
-        println!("initial error :{:?}", errors.last().unwrap());
+        if log {
+            println!(
+                "Loaded graph with {} nodes and {} edges",
+                self.nodes.len(),
+                self.edges.len()
+            );
+            println!("initial error :{:.5}", errors.last().unwrap());
+        }
         if plot {
             self.plot()?;
         }
@@ -274,8 +290,12 @@ impl PoseGraph {
             norms.push(norm_dx);
             errors.push(compute_global_error(self));
 
-            println!("|dx| for step {i} : {norm_dx}");
-            println!("errors :{:?}", errors.last().unwrap());
+            if log {
+                println!(
+                    "step {i:3} : |dx| = {norm_dx:3.5}, error = {:3.5}",
+                    errors.last().unwrap()
+                );
+            }
             if plot {
                 self.plot()?;
             }
@@ -336,6 +356,8 @@ impl PoseGraph {
 
                     update_linear_system(&mut H, &mut b, &e, &A, &B, &omega, from_idx, to_idx)?;
                 }
+                Edge::SE3 => todo!(),
+                Edge::SE3_XYZ => todo!()
             }
         }
         // Use Russell Sparse because it is much faster then nalgebra_sparse
@@ -378,6 +400,8 @@ impl PoseGraph {
                     landmarks.points_add(xy.x, xy.y);
                     landmarks_present = true;
                 }
+                Node::SE3 => todo!(),
+                Node::XYZ => todo!()
             }
         }
         poses.points_end();
@@ -483,7 +507,7 @@ fn linearize_pose_landmark_constraint(
 
 fn isometry(x: &DVector<f64>, idx: usize) -> Isometry2<f64> {
     let p = x.fixed_rows::<3>(idx);
-    Isometry2::from_parts(Translation2::new(p.x, p.y), Rotation2::new(p.z).into())
+    Isometry2::from_parts(Translation2::new(p.x, p.y), UnitComplex::from_angle(p.z))
 }
 
 fn compute_global_error(graph: &PoseGraph) -> f64 {
@@ -512,6 +536,8 @@ fn compute_global_error(graph: &PoseGraph) -> f64 {
 
                 error += pose_landmark_constraint(&x, &l.into(), &z).norm();
             }
+            Edge::SE3 => todo!(),
+            Edge::SE3_XYZ => todo!()
         }
     }
     error

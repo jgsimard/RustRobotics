@@ -70,3 +70,6 @@ path = "examples/mapping/pose_graph_optimization.rs"
 name = "kf_benchmark"
 harness = false
 
+[[bench]]
+name = "graph_slam"
+harness = false
