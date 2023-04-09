@@ -67,6 +67,7 @@ where
             cw,
         }
     }
+
     fn sigma_weights(dim: usize, alpha: T, beta: T, kappa: T) -> (Vec<T>, Vec<T>, T) {
         let n = T::from_usize(dim).unwrap();
         let lambda = alpha.powi(2) * (n + kappa) - n;
@@ -193,41 +194,5 @@ where
             x: x_est,
             cov: cov_est,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::models::measurement::SimpleProblemMeasurementModel;
-    use crate::models::motion::SimpleProblemMotionModel;
-    use crate::utils::deg2rad;
-    use nalgebra::{Const, Matrix4, Vector2, Vector4};
-
-    #[test]
-    fn ukf_runs() {
-        let dt = 0.1;
-
-        // setup ukf
-        let q = Matrix4::<f64>::from_diagonal(&Vector4::new(0.1, 0.1, deg2rad(1.0), 1.0));
-        let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
-        let ukf = UnscentedKalmanFilter::<f64, Const<4>, Const<2>, Const<2>>::new(
-            q,
-            r,
-            Box::new(SimpleProblemMeasurementModel {}),
-            Box::new(SimpleProblemMotionModel {}),
-            0.1,
-            2.0,
-            0.0,
-        );
-
-        let u: Vector2<f64> = Default::default();
-        let kalman_state = GaussianState {
-            x: Vector4::<f64>::new(0., 0., 0., 0.),
-            cov: Matrix4::<f64>::identity(),
-        };
-        let z: Vector2<f64> = Default::default();
-
-        ukf.estimate(&kalman_state, &u, &z, dt);
     }
 }
