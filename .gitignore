@@ -14,4 +14,5 @@ rust-toolchain.toml
 # https://superuser.com/questions/980632/run-perf-without-root-rights
 # sudo sh -c 'echo 1 >/proc/sys/kernel/perf_event_paranoid'
 perf.data
+perf.data.old
 flamegraph.svg
