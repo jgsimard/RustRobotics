@@ -1,6 +1,7 @@
 use nalgebra::{allocator::Allocator, Const, DefaultAllocator, Dim, OMatrix, OVector, RealField};
 use rustc_hash::FxHashMap;
 
+use crate::localization::bayesian_filter::GaussianBayesianFilter;
 use crate::models::measurement::MeasurementModel;
 use crate::models::motion::MotionModel;
 use crate::utils::state::GaussianState;
@@ -53,8 +54,24 @@ where
             motion_model,
         }
     }
+}
 
-    pub fn estimate(
+impl<T: RealField, S: Dim, Z: Dim, U: Dim> GaussianBayesianFilter<T, S, Z, U>
+    for ExtendedKalmanFilter<T, S, Z, U>
+where
+    DefaultAllocator: Allocator<T, S>
+        + Allocator<T, U>
+        + Allocator<T, Z>
+        + Allocator<T, S, S>
+        + Allocator<T, Z, Z>
+        + Allocator<T, Z, S>
+        + Allocator<T, S, U>
+        + Allocator<T, U, U>
+        + Allocator<T, S, Z>
+        + Allocator<T, Const<1>, S>
+        + Allocator<T, Const<1>, Z>,
+{
+    fn estimate(
         &self,
         estimate: &GaussianState<T, S>,
         u: &OVector<T, U>,
@@ -196,11 +213,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::localization::extended_kalman_filter::ExtendedKalmanFilter;
+    use super::*;
     use crate::models::measurement::SimpleProblemMeasurementModel;
     use crate::models::motion::SimpleProblemMotionModel;
     use crate::utils::deg2rad;
-    use crate::utils::state::GaussianState;
     use nalgebra::{Const, Matrix4, Vector2, Vector4};
 
     #[test]

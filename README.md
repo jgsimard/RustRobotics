@@ -7,8 +7,7 @@ This package is a rust implementation of robotics algorithms. So far, the main s
 - [RustRobotics](#rustrobotics)
   - [Table of Contents](#table-of-contents)
   - [Localization](#localization)
-    - [Extended Kalman Filter](#extended-kalman-filter)
-    - [Unscented Kalman Filter](#unscented-kalman-filter)
+    - [Extended Kalman Filter + Unscented Kalman Filter](#extended-kalman-filter--unscented-kalman-filter)
     - [Extended Kalman Filter With Landmarks](#extended-kalman-filter-with-landmarks)
     - [Particle Filter With Landmarks](#particle-filter-with-landmarks)
   - [Mapping](#mapping)
@@ -49,21 +48,14 @@ This package is a rust implementation of robotics algorithms. So far, the main s
 
 ## Localization
 
-### Extended Kalman Filter
+### Extended Kalman Filter + Unscented Kalman Filter
 
-[Algorithm](src/localization/extended_kalman_filter.rs), [Example](examples/localization/extended_kalman_filter.rs)
-
-```bash
-cargo run --example ekf
-```
-
-### Unscented Kalman Filter
-
-[Algorithm](src/localization/unscented_kalman_filter.rs), [Example](examples/localization/unscented_kalman_filter.rs)
+[EKF](src/localization/extended_kalman_filter.rs), [UKF](src/localization/unscented_kalman_filter.rs) [Example](examples/localization/ekf_ukf.rs)
 
 ```bash
-cargo run --example ukf
+cargo run --example localization
 ```
+
 
 ### Extended Kalman Filter With Landmarks
 
@@ -85,7 +77,7 @@ cargo run --example pf_lm
 
 ### Pose Graph Optimization
 
-This algorithm uses the sparse solver in [Russel](https://github.com/cpmech/russell/tree/main/russell_sparse) so follow the installation instructions. [Algorithm](src/mapping/pose_graph_slam.rs), [Example](examples/mapping/pose_graph_optimization.rs), [Source](https://www.researchgate.net/profile/Mohamed-Mourad-Lafifi/post/What_is_the_relationship_between_GraphSLAM_and_Pose_Graph_SLAM/attachment/613b3f63647f3906fc978272/AS%3A1066449581928450%401631272802870/download/A+tutorial+on+graph-based+SLAM+_+Grisetti2010.pdf)
+This algorithm uses the sparse solver in [Russel](https://github.com/cpmech/russell/tree/main/russell_sparse) so follow the installation instructions. [Algorithm](src/mapping/pose_graph_optimization.rs), [Example](examples/mapping/pose_graph_optimization.rs), [Source](https://www.researchgate.net/profile/Mohamed-Mourad-Lafifi/post/What_is_the_relationship_between_GraphSLAM_and_Pose_Graph_SLAM/attachment/613b3f63647f3906fc978272/AS%3A1066449581928450%401631272802870/download/A+tutorial+on+graph-based+SLAM+_+Grisetti2010.pdf)
 
 ```bash
 cargo run --example pose_graph_optimization

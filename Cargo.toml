@@ -46,13 +46,9 @@ codegen-units = 512
 debug = true
 
 [[example]]
-name = "ekf"
-path = "examples/localization/extended_kalman_filter.rs"
+name = "localization"
+path = "examples/localization/ekf_ukf.rs"
 
-
-[[example]]
-name = "ukf"
-path = "examples/localization/unscented_kalman_filter.rs"
 
 [[example]]
 name = "ekf_lm"

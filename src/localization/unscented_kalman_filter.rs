@@ -2,6 +2,7 @@ use nalgebra::{
     allocator::Allocator, Const, DefaultAllocator, Dim, OMatrix, OVector, RealField, U1,
 };
 
+use crate::localization::bayesian_filter::GaussianBayesianFilter;
 use crate::models::measurement::MeasurementModel;
 use crate::models::motion::MotionModel;
 use crate::utils::state::GaussianState;
@@ -83,7 +84,7 @@ where
         (mw, cw, gamma)
     }
 
-    fn generate_sigma_points(&self, state: &GaussianState<T, S>) -> Vec<OVector<T, S>> {
+    pub fn generate_sigma_points(&self, state: &GaussianState<T, S>) -> Vec<OVector<T, S>> {
         let dim = self.q.shape_generic().0.value();
         // use cholesky to compute the matrix square root  // cholesky(A) = L * L^T
         let sigma = state.cov.clone().cholesky().expect("unable to sqrt").l() * self.gamma;
@@ -102,8 +103,24 @@ where
         }
         sigma_points
     }
+}
 
-    pub fn estimate(
+impl<T: RealField + Copy, S: Dim, Z: Dim, U: Dim> GaussianBayesianFilter<T, S, Z, U>
+    for UnscentedKalmanFilter<T, S, Z, U>
+where
+    DefaultAllocator: Allocator<T, S>
+        + Allocator<T, U>
+        + Allocator<T, Z>
+        + Allocator<T, S, S>
+        + Allocator<T, Z, Z>
+        + Allocator<T, Z, S>
+        + Allocator<T, S, U>
+        + Allocator<T, U, U>
+        + Allocator<T, S, Z>
+        + Allocator<T, Const<1>, S>
+        + Allocator<T, Const<1>, Z>,
+{
+    fn estimate(
         &self,
         state: &GaussianState<T, S>,
         u: &OVector<T, U>,
@@ -181,11 +198,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::localization::unscented_kalman_filter::UnscentedKalmanFilter;
+    use super::*;
     use crate::models::measurement::SimpleProblemMeasurementModel;
     use crate::models::motion::SimpleProblemMotionModel;
     use crate::utils::deg2rad;
-    use crate::utils::state::GaussianState;
     use nalgebra::{Const, Matrix4, Vector2, Vector4};
 
     #[test]
