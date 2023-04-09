@@ -23,9 +23,9 @@ russell_lab = "0.4"
 russell_sparse = "0.4"
 plotpy = "0.3"
 rayon = "1.7"
-# python
-pyo3 = { version = "0.18", features = ["extension-module"] }
-numpy = {version = "0.18", features = ["nalgebra"] }
+# # python
+# pyo3 = { version = "0.18", features = ["extension-module"] }
+# numpy = {version = "0.18", features = ["nalgebra"] }
 
 [dev-dependencies]
 criterion = "0.4"
@@ -34,7 +34,8 @@ dialoguer = "0.10"
 
 [lib]
 name = "robotics"
-crate-type = ["cdylib", "lib"] # cdylib=python, lib=rust
+# crate-type = ["cdylib", "lib"] # cdylib=python, lib=rust
+crate-type = ["lib"] # cdylib=python, lib=rust
 
 [profile.dev]
 opt-level = 1
