@@ -1396,6 +1396,7 @@ dependencies = [
  "pyo3",
  "rand",
  "rand_distr",
+ "rayon",
  "russell_lab",
  "russell_sparse",
  "rustc-hash",

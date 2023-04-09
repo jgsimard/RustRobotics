@@ -22,7 +22,7 @@ rand_distr = "0.4"
 russell_lab = "0.4"
 russell_sparse = "0.4"
 plotpy = "0.3"
-
+rayon = "1.7"
 # python
 pyo3 = { version = "0.18", features = ["extension-module"] }
 numpy = {version = "0.18", features = ["nalgebra"] }
@@ -68,7 +68,7 @@ path = "examples/mapping/pose_graph_optimization.rs"
 
 
 [[bench]]
-name = "kf_benchmark"
+name = "kalman_filter"
 harness = false
 
 [[bench]]

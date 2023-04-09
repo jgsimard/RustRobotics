@@ -6,6 +6,7 @@ use nalgebra::{
     Vector2, Vector3,
 };
 use plotpy::{Curve, Plot};
+use rayon::prelude::*;
 use russell_lab::Vector;
 use russell_sparse::{ConfigSolver, Solver, SparseTriplet, Symmetry};
 use rustc_hash::FxHashMap;
@@ -134,6 +135,41 @@ fn set_vector<const D: usize>(v: &mut Vector, i: usize, source: &SVector<f64, D>
     }
 }
 
+fn solve_sparse(A: &SparseTriplet, b: &Vector) -> Result<DVector<f64>, Box<dyn Error>> {
+    // Use Russell Sparse because it is much faster then nalgebra_sparse,
+    // it uses SuitsSparse
+    let n = b.dim();
+    let mut solution = Vector::new(n);
+    let config = ConfigSolver::new();
+    let mut solver = Solver::new(config)?;
+    solver.initialize(A)?;
+    solver.factorize()?;
+    solver.solve(&mut solution, b)?;
+    Ok(DVector::from_vec(solution.as_data().clone()))
+}
+
+// trait PoseGraphSolver{
+//     fn step();
+// }
+
+// struct GaussNewton;
+
+// impl PoseGraphSolver for GaussNewton {
+//     fn step() {
+
+//     }
+// }
+
+// struct LevenbergMarquardt {
+//     lambda: f64
+// }
+
+// impl PoseGraphSolver for LevenbergMarquardt {
+//     fn step() {
+
+//     }
+// }
+
 impl PoseGraph {
     pub fn new(
         x: DVector<f64>,
@@ -190,7 +226,7 @@ impl PoseGraph {
                     // let qy = line[6].parse::<f64>()?;
                     // let qz = line[7].parse::<f64>()?;
                     // let qw = line[8].parse::<f64>()?;
-                    unimplemented!("VERTEX_SE3:QUAT")
+                    todo!("VERTEX_SE3:QUAT")
                 }
                 "EDGE_SE2" => {
                     let from = line[1].parse::<u32>()?;
@@ -240,7 +276,7 @@ impl PoseGraph {
                     edges.push(edge);
                 }
                 "EDGE_SE3:QUAT" => {
-                    unimplemented!("EDGE_SE3:QUAT")
+                    todo!("EDGE_SE3:QUAT")
                 }
                 _ => unimplemented!("{}", line[0]),
             }
@@ -267,10 +303,10 @@ impl PoseGraph {
         num_iterations: usize,
         log: bool,
         plot: bool,
-    ) -> Result<(), Box<dyn Error>> {
+    ) -> Result<Vec<f64>, Box<dyn Error>> {
         let tolerance = 1e-4;
         let mut norms = Vec::new();
-        let mut errors = vec![compute_global_error(self)];
+        let mut errors = vec![global_error(self)];
         if log {
             println!(
                 "Loaded graph with {} nodes and {} edges",
@@ -285,10 +321,12 @@ impl PoseGraph {
         for i in 0..num_iterations {
             self.iteration += 1;
             let dx = self.linearize_and_solve()?;
+            // let (H, b) = self.build_linear_system()?;
+            // let dx = solve_sparse(&H, &b)?;
             self.x += &dx;
             let norm_dx = dx.norm();
             norms.push(norm_dx);
-            errors.push(compute_global_error(self));
+            errors.push(global_error(self));
 
             if log {
                 println!(
@@ -304,10 +342,10 @@ impl PoseGraph {
                 break;
             }
         }
-        Ok(())
+        Ok(errors)
     }
 
-    fn linearize_and_solve(&self) -> Result<DVector<f64>, Box<dyn Error>> {
+    fn build_linear_system(&self) -> Result<(SparseTriplet, Vector), Box<dyn Error>> {
         let n = self.x.shape().0;
 
         let mut H = SparseTriplet::new(n, n, n * n, Symmetry::General)?;
@@ -315,7 +353,6 @@ impl PoseGraph {
 
         let mut need_to_add_prior = true;
 
-        // make linear system
         for edge in &self.edges {
             match edge {
                 Edge::SE2(edge) => {
@@ -360,15 +397,13 @@ impl PoseGraph {
                 Edge::SE3_XYZ => todo!(),
             }
         }
-        // Use Russell Sparse because it is much faster then nalgebra_sparse
         b.map(|x| -x);
-        let mut solution = Vector::new(n);
-        let config = ConfigSolver::new();
-        let mut solver = Solver::new(config)?;
-        solver.initialize(&H)?;
-        solver.factorize()?;
-        solver.solve(&mut solution, &b)?;
-        Ok(DVector::from_vec(solution.as_data().clone()))
+        Ok((H, b))
+    }
+
+    fn linearize_and_solve(&self) -> Result<DVector<f64>, Box<dyn Error>> {
+        let (H, b) = self.build_linear_system()?;
+        solve_sparse(&H, &b)
     }
 
     pub fn plot(&self) -> Result<(), Box<dyn Error>> {
@@ -510,37 +545,43 @@ fn isometry(x: &DVector<f64>, idx: usize) -> Isometry2<f64> {
     Isometry2::from_parts(Translation2::new(p.x, p.y), UnitComplex::from_angle(p.z))
 }
 
-fn compute_global_error(graph: &PoseGraph) -> f64 {
-    let mut error = 0.0;
-    for edge in &graph.edges {
-        match edge {
-            Edge::SE2(e) => {
-                let from_idx = *graph.lut.get(&e.from).unwrap();
-                let to_idx = *graph.lut.get(&e.to).unwrap();
+fn global_error(graph: &PoseGraph) -> f64 {
+    graph
+        .edges
+        .par_iter()
+        .map(|edge| {
+            match edge {
+                Edge::SE2(edge) => {
+                    let from_idx = *graph.lut.get(&edge.from).unwrap();
+                    let to_idx = *graph.lut.get(&edge.to).unwrap();
 
-                let x1 = isometry(&graph.x, from_idx);
-                let x2 = isometry(&graph.x, to_idx);
+                    let x1 = isometry(&graph.x, from_idx);
+                    let x2 = isometry(&graph.x, to_idx);
 
-                let z = e.measurement;
+                    let z = edge.measurement;
+                    let omega = edge.information;
 
-                error += pose_pose_constraint(&x1, &x2, &z).norm();
+                    let e = pose_pose_constraint(&x1, &x2, &z);
+
+                    (e.transpose() * omega * e).x
+                }
+                Edge::SE2_XY(edge) => {
+                    let from_idx = *graph.lut.get(&edge.from).unwrap();
+                    let to_idx = *graph.lut.get(&edge.to).unwrap();
+
+                    // TODO: change to only read the rotation, dont use translation anyway
+                    let x = isometry(&graph.x, from_idx);
+                    let l = graph.x.fixed_rows::<2>(to_idx);
+                    let z = edge.measurement;
+                    let omega = edge.information;
+                    let e = pose_landmark_constraint(&x, &l.into(), &z);
+                    (e.transpose() * omega * e).x
+                }
+                Edge::SE3 => todo!(),
+                Edge::SE3_XYZ => todo!(),
             }
-            Edge::SE2_XY(e) => {
-                let from_idx = *graph.lut.get(&e.from).unwrap();
-                let to_idx = *graph.lut.get(&e.to).unwrap();
-
-                // TODO: change to only read the rotation, dont use translation anyway
-                let x = isometry(&graph.x, from_idx);
-                let l = graph.x.fixed_rows::<2>(to_idx);
-                let z = e.measurement;
-
-                error += pose_landmark_constraint(&x, &l.into(), &z).norm();
-            }
-            Edge::SE3 => todo!(),
-            Edge::SE3_XYZ => todo!(),
-        }
-    }
-    error
+        })
+        .sum()
 }
 
 #[cfg(test)]
@@ -548,7 +589,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn read_g2o_file_runs() -> Result<(), Box<dyn Error>> {
+    fn from_g2o() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-pose.g2o";
         let graph = PoseGraph::from_g2o(filename)?;
         assert_eq!(400, graph.nodes.len());
@@ -576,36 +617,55 @@ mod tests {
     }
 
     #[test]
-    fn compute_global_error_correct_pose_pose() -> Result<(), Box<dyn Error>> {
+    fn initial_global_error() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-pose.g2o";
         let graph = PoseGraph::from_g2o(filename)?;
-        approx::assert_abs_diff_eq!(3558.0723, compute_global_error(&graph), epsilon = 1e-2);
+        approx::assert_abs_diff_eq!(138862234.0, global_error(&graph), epsilon = 10.0);
 
-        Ok(())
-    }
-
-    #[test]
-    fn compute_global_error_correct_pose_landmark() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
         let graph = PoseGraph::from_g2o(filename)?;
-        approx::assert_abs_diff_eq!(72.50542, compute_global_error(&graph), epsilon = 1e-2);
+        approx::assert_abs_diff_eq!(3030.0, global_error(&graph), epsilon = 1.0);
 
-        Ok(())
-    }
-
-    #[test]
-    fn compute_global_error_correct_intel() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/intel.g2o";
         let graph = PoseGraph::from_g2o(filename)?;
-        approx::assert_abs_diff_eq!(6109.409, compute_global_error(&graph), epsilon = 1e-2);
+        approx::assert_abs_diff_eq!(1795139.0, global_error(&graph), epsilon = 1e-2);
+
+        let filename = "dataset/g2o/dlr.g2o";
+        let graph = PoseGraph::from_g2o(filename)?;
+        approx::assert_abs_diff_eq!(369655336.0, global_error(&graph), epsilon = 10.0);
         Ok(())
     }
 
     #[test]
-    fn compute_global_error_correct_dlr() -> Result<(), Box<dyn Error>> {
+    fn final_global_error() -> Result<(), Box<dyn Error>> {
+        let filename = "dataset/g2o/simulation-pose-pose.g2o";
+        let error = *PoseGraph::from_g2o(filename)?
+            .optimize(100, false, false)?
+            .last()
+            .unwrap();
+        approx::assert_abs_diff_eq!(8269.0, error, epsilon = 1.0);
+
+        let filename = "dataset/g2o/simulation-pose-landmark.g2o";
+        let error = *PoseGraph::from_g2o(filename)?
+            .optimize(100, false, false)?
+            .last()
+            .unwrap();
+        approx::assert_abs_diff_eq!(474.0, error, epsilon = 1.0);
+
+        let filename = "dataset/g2o/intel.g2o";
+        let error = *PoseGraph::from_g2o(filename)?
+            .optimize(100, false, false)?
+            .last()
+            .unwrap();
+        approx::assert_abs_diff_eq!(360.0, error, epsilon = 1.0);
+
         let filename = "dataset/g2o/dlr.g2o";
-        let graph = PoseGraph::from_g2o(filename)?;
-        approx::assert_abs_diff_eq!(37338.21, compute_global_error(&graph), epsilon = 1e-2);
+        let error = *PoseGraph::from_g2o(filename)?
+            .optimize(100, false, false)?
+            .last()
+            .unwrap();
+        approx::assert_abs_diff_eq!(56860.0, error, epsilon = 1.0);
+
         Ok(())
     }
 
