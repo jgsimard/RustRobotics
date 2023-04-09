@@ -8,12 +8,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     std::fs::create_dir_all("./img")?;
 
     let filenames = &[
-        "dataset/g2o/simulation-pose-pose.g2o",
-        "dataset/g2o/simulation-pose-landmark.g2o",
-        "dataset/g2o/dlr.g2o",
-        "dataset/g2o/intel.g2o",
-        "dataset/g2o/input_M3500_g2o.g2o",
-        "dataset/g2o/sphere2500.g2o",
+        "simulation-pose-pose.g2o",
+        "simulation-pose-landmark.g2o",
+        "dlr.g2o",
+        "intel.g2o",
+        "input_M3500_g2o.g2o",
+        "sphere2500.g2o",
+        "torus3D.g2o",
+        "parking-garage.g2o"
     ];
     let filename_idx = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Pick g2o file")
@@ -21,7 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .items(&filenames[..])
         .interact()
         .unwrap();
-    let filename = filenames[filename_idx];
+    let filename = format!("dataset/g2o/{}", filenames[filename_idx]);
 
     let plot = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Plot the resut?")
@@ -31,7 +33,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .unwrap();
     let plot = plot == 0;
 
-    let mut graph = PoseGraph::from_g2o(filename)?;
+    let mut graph = PoseGraph::from_g2o(filename.as_str())?;
     graph.optimize(50, true, plot)?;
     Ok(())
 }

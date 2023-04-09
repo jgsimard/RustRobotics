@@ -310,7 +310,7 @@ impl PoseGraph {
     fn linearize_and_solve(&self) -> Result<DVector<f64>, Box<dyn Error>> {
         let n = self.x.shape().0;
 
-        let mut H = SparseTriplet::new(n, n, n * n, Symmetry::General).unwrap();
+        let mut H = SparseTriplet::new(n, n, n * n, Symmetry::General)?;
         let mut b = Vector::new(n);
 
         let mut need_to_add_prior = true;
@@ -635,7 +635,7 @@ mod tests {
                 approx::assert_abs_diff_eq!(B_expected, B, epsilon = 1e-3);
                 approx::assert_abs_diff_eq!(Vector3::zeros(), e, epsilon = 1e-3);
             }
-            Edge::SE2_XY(_) => panic!(),
+            _ => panic!(),
         }
 
         match &graph.edges[10] {
@@ -660,7 +660,7 @@ mod tests {
                 approx::assert_abs_diff_eq!(B_expected, B, epsilon = 1e-3);
                 approx::assert_abs_diff_eq!(Vector3::zeros(), e, epsilon = 1e-3);
             }
-            Edge::SE2_XY(_) => panic!(),
+            _ => panic!(),
         }
 
         Ok(())
@@ -672,7 +672,6 @@ mod tests {
         let graph = PoseGraph::from_g2o(filename)?;
 
         match &graph.edges[1] {
-            Edge::SE2(_) => panic!(),
             Edge::SE2_XY(edge) => {
                 let from_idx = *graph.lut.get(&edge.from).unwrap();
                 let to_idx = *graph.lut.get(&edge.to).unwrap();
@@ -692,6 +691,7 @@ mod tests {
                 approx::assert_abs_diff_eq!(B_expected, B, epsilon = 1e-3);
                 approx::assert_abs_diff_eq!(Vector2::zeros(), e, epsilon = 1e-3);
             }
+            _ => panic!()
         }
         Ok(())
     }
