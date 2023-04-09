@@ -50,7 +50,7 @@ This package is a rust implementation of robotics algorithms. So far, the main s
 
 ### Extended Kalman Filter + Unscented Kalman Filter + Particle Filter
 
-[EKF](src/localization/extended_kalman_filter.rs), [UKF](src/localization/unscented_kalman_filter.rs), [PF](src/localization/particle_filter.rs), [Example](examples/localization/ekf_ukf.rs)
+[EKF](src/localization/extended_kalman_filter.rs), [UKF](src/localization/unscented_kalman_filter.rs), [PF](src/localization/particle_filter.rs), [Example](examples/localization/bayesian_filter.rs)
 
 ```bash
 cargo run --example localization
