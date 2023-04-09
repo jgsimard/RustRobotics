@@ -1,7 +1,7 @@
 use nalgebra::{allocator::Allocator, Const, DefaultAllocator, Dim, OMatrix, OVector, RealField};
 use rustc_hash::FxHashMap;
 
-use crate::localization::bayesian_filter::GaussianBayesianFilter;
+use crate::localization::bayesian_filter::BayesianFilter;
 use crate::models::measurement::MeasurementModel;
 use crate::models::motion::MotionModel;
 use crate::utils::state::GaussianState;
@@ -25,6 +25,7 @@ where
     q: OMatrix<T, Z, Z>,
     measurement_model: Box<dyn MeasurementModel<T, S, Z> + Send>,
     motion_model: Box<dyn MotionModel<T, S, Z, U> + Send>,
+    state: GaussianState<T, S>,
 }
 
 impl<T: RealField, S: Dim, Z: Dim, U: Dim> ExtendedKalmanFilter<T, S, Z, U>
@@ -46,17 +47,19 @@ where
         q: OMatrix<T, Z, Z>,
         measurement_model: Box<dyn MeasurementModel<T, S, Z> + Send>,
         motion_model: Box<dyn MotionModel<T, S, Z, U> + Send>,
+        initial_state: GaussianState<T, S>,
     ) -> ExtendedKalmanFilter<T, S, Z, U> {
         ExtendedKalmanFilter {
             r,
             q,
             measurement_model,
             motion_model,
+            state: initial_state,
         }
     }
 }
 
-impl<T: RealField, S: Dim, Z: Dim, U: Dim> GaussianBayesianFilter<T, S, Z, U>
+impl<T: RealField, S: Dim, Z: Dim, U: Dim> BayesianFilter<T, S, Z, U>
     for ExtendedKalmanFilter<T, S, Z, U>
 where
     DefaultAllocator: Allocator<T, S>
@@ -71,19 +74,19 @@ where
         + Allocator<T, Const<1>, S>
         + Allocator<T, Const<1>, Z>,
 {
-    fn estimate(
-        &self,
-        estimate: &GaussianState<T, S>,
+    fn update_estimate(
+        &mut self,
+        // estimate: &GaussianState<T, S>,
         u: &OVector<T, U>,
         z: &OVector<T, Z>,
         dt: T,
-    ) -> GaussianState<T, S> {
+    ) {
         // predict
         let g = self
             .motion_model
-            .jacobian_wrt_state(&estimate.x, u, dt.clone());
-        let x_pred = self.motion_model.prediction(&estimate.x, u, dt);
-        let cov_pred = &g * &estimate.cov * g.transpose() + &self.r;
+            .jacobian_wrt_state(&self.state.x, u, dt.clone());
+        let x_pred = self.motion_model.prediction(&self.state.x, u, dt);
+        let cov_pred = &g * &self.state.cov * g.transpose() + &self.r;
 
         // update
         let h = self.measurement_model.jacobian(&x_pred, None);
@@ -94,10 +97,14 @@ where
         let x_est = &x_pred + &kalman_gain * (z - z_pred);
         let shape = cov_pred.shape_generic();
         let cov_est = (OMatrix::identity_generic(shape.0, shape.1) - kalman_gain * h) * &cov_pred;
-        GaussianState {
+        self.state = GaussianState {
             x: x_est,
             cov: cov_est,
         }
+    }
+
+    fn gaussian_estimate(&self) -> GaussianState<T, S> {
+        self.state.clone()
     }
 }
 

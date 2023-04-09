@@ -7,7 +7,7 @@ This package is a rust implementation of robotics algorithms. So far, the main s
 - [RustRobotics](#rustrobotics)
   - [Table of Contents](#table-of-contents)
   - [Localization](#localization)
-    - [Extended Kalman Filter + Unscented Kalman Filter](#extended-kalman-filter--unscented-kalman-filter)
+    - [Extended Kalman Filter + Unscented Kalman Filter + Particle Filter](#extended-kalman-filter--unscented-kalman-filter--particle-filter)
     - [Extended Kalman Filter With Landmarks](#extended-kalman-filter-with-landmarks)
     - [Particle Filter With Landmarks](#particle-filter-with-landmarks)
   - [Mapping](#mapping)
@@ -48,9 +48,9 @@ This package is a rust implementation of robotics algorithms. So far, the main s
 
 ## Localization
 
-### Extended Kalman Filter + Unscented Kalman Filter
+### Extended Kalman Filter + Unscented Kalman Filter + Particle Filter
 
-[EKF](src/localization/extended_kalman_filter.rs), [UKF](src/localization/unscented_kalman_filter.rs) [Example](examples/localization/ekf_ukf.rs)
+[EKF](src/localization/extended_kalman_filter.rs), [UKF](src/localization/unscented_kalman_filter.rs), [PF](src/localization/particle_filter.rs), [Example](examples/localization/ekf_ukf.rs)
 
 ```bash
 cargo run --example localization

@@ -5,8 +5,9 @@ use rand_distr::{Distribution, Normal};
 use std::error::Error;
 
 extern crate robotics;
-use robotics::localization::bayesian_filter::GaussianBayesianFilter;
+use robotics::localization::bayesian_filter::BayesianFilter;
 use robotics::localization::extended_kalman_filter::ExtendedKalmanFilter;
+use robotics::localization::particle_filter::ParticleFilter;
 use robotics::localization::unscented_kalman_filter::UnscentedKalmanFilter;
 use robotics::models::measurement::{MeasurementModel, SimpleProblemMeasurementModel};
 use robotics::models::motion::{MotionModel, SimpleProblemMotionModel};
@@ -66,12 +67,18 @@ fn run(algo: &str) -> History {
 
     let r = nalgebra::Matrix2::identity(); //Observation x,y position covariance
 
-    let kf: Box<dyn GaussianBayesianFilter<f64, Const<4>, Const<2>, Const<2>>> = match algo {
+    let initial_state = GaussianState {
+        x: Vector4::<f64>::new(0., 0., 0., 0.),
+        cov: Matrix4::<f64>::identity(),
+    };
+    let mut bayesian_filter: Box<dyn BayesianFilter<f64, Const<4>, Const<2>, Const<2>>> = match algo
+    {
         "Extended Kalman Filter (EKF)" => Box::new(ExtendedKalmanFilter::new(
             q,
             r,
             SimpleProblemMeasurementModel::new(),
             SimpleProblemMotionModel::new(),
+            initial_state,
         )),
         "Unscented Kalman Filter (UKF)" => Box::new(UnscentedKalmanFilter::new(
             q,
@@ -81,6 +88,15 @@ fn run(algo: &str) -> History {
             0.1,
             2.0,
             0.0,
+            initial_state,
+        )),
+        "Particle Filter (PF)" => Box::new(ParticleFilter::new(
+            q,
+            r,
+            SimpleProblemMeasurementModel::new(),
+            SimpleProblemMotionModel::new(),
+            initial_state,
+            300,
         )),
         _ => unimplemented!("{}", algo),
     };
@@ -96,10 +112,6 @@ fn run(algo: &str) -> History {
     let mut ud: Vector2<f64>;
     let mut x_dr = Vector4::<f64>::new(0., 0., 0., 0.);
     let mut x_true = Vector4::<f64>::new(0., 0., 0., 0.);
-    let mut gaussian_state = GaussianState {
-        x: Vector4::<f64>::new(0., 0., 0., 0.),
-        cov: Matrix4::<f64>::identity(),
-    };
     let mut z: Vector2<f64>;
 
     let mut history = History::default();
@@ -107,7 +119,8 @@ fn run(algo: &str) -> History {
     while time < sim_time {
         time += dt;
         (x_true, z, x_dr, ud) = simple_problem.observation(&x_true, &x_dr, &u, dt);
-        gaussian_state = kf.estimate(&gaussian_state, &ud, &z, dt);
+        bayesian_filter.update_estimate(&ud, &z, dt);
+        let gaussian_state = bayesian_filter.gaussian_estimate();
 
         // record step
         history.z.push((z[0] as f64, z[1] as f64));
@@ -125,6 +138,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let algos = &[
         "Extended Kalman Filter (EKF)",
         "Unscented Kalman Filter (UKF)",
+        "Particle Filter (PF)",
     ];
     let algo_idx = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Pick localization algorithm")
@@ -144,6 +158,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let path = match algo_idx {
         0 => "ekf",
         1 => "ukf",
+        2 => "pf",
         _ => unreachable!(),
     };
 

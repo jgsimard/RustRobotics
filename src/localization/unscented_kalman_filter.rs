@@ -2,7 +2,7 @@ use nalgebra::{
     allocator::Allocator, Const, DefaultAllocator, Dim, OMatrix, OVector, RealField, U1,
 };
 
-use crate::localization::bayesian_filter::GaussianBayesianFilter;
+use crate::localization::bayesian_filter::BayesianFilter;
 use crate::models::measurement::MeasurementModel;
 use crate::models::motion::MotionModel;
 use crate::utils::state::GaussianState;
@@ -29,6 +29,7 @@ where
     motion_model: Box<dyn MotionModel<T, S, Z, U> + Send>,
     mw: Vec<T>,
     cw: Vec<T>,
+    state: GaussianState<T, S>,
 }
 
 impl<T: RealField + Copy, S: Dim, Z: Dim, U: Dim> UnscentedKalmanFilter<T, S, Z, U>
@@ -45,6 +46,7 @@ where
         + Allocator<T, Const<1>, S>
         + Allocator<T, Const<1>, Z>,
 {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         q: OMatrix<T, S, S>,
         r: OMatrix<T, Z, Z>,
@@ -53,6 +55,7 @@ where
         alpha: T,
         beta: T,
         kappa: T,
+        initial_state: GaussianState<T, S>,
     ) -> UnscentedKalmanFilter<T, S, Z, U> {
         let dim = q.shape_generic().0.value();
         let (mw, cw, gamma) =
@@ -65,6 +68,7 @@ where
             gamma,
             mw,
             cw,
+            state: initial_state,
         }
     }
 
@@ -106,7 +110,7 @@ where
     }
 }
 
-impl<T: RealField + Copy, S: Dim, Z: Dim, U: Dim> GaussianBayesianFilter<T, S, Z, U>
+impl<T: RealField + Copy, S: Dim, Z: Dim, U: Dim> BayesianFilter<T, S, Z, U>
     for UnscentedKalmanFilter<T, S, Z, U>
 where
     DefaultAllocator: Allocator<T, S>
@@ -121,17 +125,17 @@ where
         + Allocator<T, Const<1>, S>
         + Allocator<T, Const<1>, Z>,
 {
-    fn estimate(
-        &self,
-        state: &GaussianState<T, S>,
+    fn update_estimate(
+        &mut self,
+        // state: &GaussianState<T, S>,
         u: &OVector<T, U>,
         z: &OVector<T, Z>,
         dt: T,
-    ) -> GaussianState<T, S> {
+    ) {
         let dim_s = self.q.shape_generic().0;
         let dim_z = self.r.shape_generic().0;
         // predict
-        let sigma_points = self.generate_sigma_points(state);
+        let sigma_points = self.generate_sigma_points(&self.state);
         let sp_xpred: Vec<OVector<T, S>> = sigma_points
             .iter()
             .map(|x| self.motion_model.prediction(x, u, dt))
@@ -190,9 +194,13 @@ where
 
         let x_est = mean_xpred + &kalman_gain * y;
         let cov_est = cov_xpred - &kalman_gain * cov_z * kalman_gain.transpose();
-        GaussianState {
+        self.state = GaussianState {
             x: x_est,
             cov: cov_est,
         }
+    }
+
+    fn gaussian_estimate(&self) -> GaussianState<T, S> {
+        self.state.clone()
     }
 }

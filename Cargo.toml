@@ -47,7 +47,7 @@ debug = true
 
 [[example]]
 name = "localization"
-path = "examples/localization/ekf_ukf.rs"
+path = "examples/localization/bayesian_filter.rs"
 
 
 [[example]]
