@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         "input_M3500_g2o.g2o",
         "sphere2500.g2o",
         "torus3D.g2o",
-        "parking-garage.g2o"
+        "parking-garage.g2o",
     ];
     let filename_idx = Select::with_theme(&ColorfulTheme::default())
         .with_prompt("Pick g2o file")

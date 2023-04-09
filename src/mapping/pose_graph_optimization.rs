@@ -2,8 +2,8 @@
 #![allow(non_camel_case_types)]
 #![allow(clippy::deprecated_cfg_attr)]
 use nalgebra::{
-    DVector, Isometry2, Matrix2, Matrix2x3, Matrix3, SMatrix, SVector, Translation2,
-    Vector2, Vector3, UnitComplex,
+    DVector, Isometry2, Matrix2, Matrix2x3, Matrix3, SMatrix, SVector, Translation2, UnitComplex,
+    Vector2, Vector3,
 };
 use plotpy::{Curve, Plot};
 use russell_lab::Vector;
@@ -16,7 +16,7 @@ pub enum Edge<T> {
     SE2(EdgeSE2<T>),
     SE2_XY(EdgeSE2_XY<T>),
     SE3,
-    SE3_XYZ
+    SE3_XYZ,
 }
 
 #[derive(Debug)]
@@ -72,7 +72,7 @@ pub enum Node {
     SE2,
     SE3,
     XY,
-    XYZ
+    XYZ,
 }
 pub struct PoseGraph {
     x: DVector<f64>,
@@ -357,7 +357,7 @@ impl PoseGraph {
                     update_linear_system(&mut H, &mut b, &e, &A, &B, &omega, from_idx, to_idx)?;
                 }
                 Edge::SE3 => todo!(),
-                Edge::SE3_XYZ => todo!()
+                Edge::SE3_XYZ => todo!(),
             }
         }
         // Use Russell Sparse because it is much faster then nalgebra_sparse
@@ -401,7 +401,7 @@ impl PoseGraph {
                     landmarks_present = true;
                 }
                 Node::SE3 => todo!(),
-                Node::XYZ => todo!()
+                Node::XYZ => todo!(),
             }
         }
         poses.points_end();
@@ -537,7 +537,7 @@ fn compute_global_error(graph: &PoseGraph) -> f64 {
                 error += pose_landmark_constraint(&x, &l.into(), &z).norm();
             }
             Edge::SE3 => todo!(),
-            Edge::SE3_XYZ => todo!()
+            Edge::SE3_XYZ => todo!(),
         }
     }
     error
@@ -691,7 +691,7 @@ mod tests {
                 approx::assert_abs_diff_eq!(B_expected, B, epsilon = 1e-3);
                 approx::assert_abs_diff_eq!(Vector2::zeros(), e, epsilon = 1e-3);
             }
-            _ => panic!()
+            _ => panic!(),
         }
         Ok(())
     }
