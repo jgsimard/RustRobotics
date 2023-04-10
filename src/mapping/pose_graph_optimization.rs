@@ -382,8 +382,8 @@ impl PoseGraph {
                     let from_idx = *self.lut.get(&edge.from).unwrap();
                     let to_idx = *self.lut.get(&edge.to).unwrap();
 
-                    let Node::SE2(x1) = self.nodes.get(&edge.from).unwrap() else {todo!()};
-                    let Node::SE2(x2) = self.nodes.get(&edge.to).unwrap() else {todo!()};
+                    let Some(Node::SE2(x1)) = self.nodes.get(&edge.from) else {unreachable!()};
+                    let Some(Node::SE2(x2)) = self.nodes.get(&edge.to) else {unreachable!()};
 
                     let z = &edge.measurement;
                     let omega = &edge.information;
@@ -405,8 +405,8 @@ impl PoseGraph {
                     let from_idx = *self.lut.get(&edge.from).unwrap();
                     let to_idx = *self.lut.get(&edge.to).unwrap();
 
-                    let Node::SE2(x) = self.nodes.get(&edge.from).unwrap() else {todo!()};
-                    let Node::XY(landmark) = self.nodes.get(&edge.to).unwrap() else {todo!()};
+                    let Some(Node::SE2(x)) = self.nodes.get(&edge.from) else {unreachable!()};
+                    let Some(Node::XY(landmark)) = self.nodes.get(&edge.to) else {unreachable!()};
 
                     let z = &edge.measurement;
                     let omega = &edge.information;
@@ -567,8 +567,8 @@ fn global_error(graph: &PoseGraph) -> f64 {
         .par_iter()
         .map(|edge| match edge {
             Edge::SE2(edge) => {
-                let Node::SE2(x1) = graph.nodes.get(&edge.from).unwrap() else {todo!()};
-                let Node::SE2(x2) = graph.nodes.get(&edge.to).unwrap() else {todo!()};
+                let Some(Node::SE2(x1)) = graph.nodes.get(&edge.from) else {unreachable!()};
+                let Some(Node::SE2(x2)) = graph.nodes.get(&edge.to) else {unreachable!()};
 
                 let z = &edge.measurement;
                 let omega = &edge.information;
@@ -578,8 +578,8 @@ fn global_error(graph: &PoseGraph) -> f64 {
                 (e.transpose() * omega * e).x
             }
             Edge::SE2_XY(edge) => {
-                let Node::SE2(x) = graph.nodes.get(&edge.from).unwrap() else {todo!()};
-                let Node::XY(l) = graph.nodes.get(&edge.to).unwrap() else {todo!()};
+                let Some(Node::SE2(x)) = graph.nodes.get(&edge.from) else {unreachable!()};
+                let Some(Node::XY(l)) = graph.nodes.get(&edge.to) else {unreachable!()};
 
                 let z = &edge.measurement;
                 let omega = &edge.information;
@@ -684,8 +684,8 @@ mod tests {
 
         match &graph.edges[0] {
             Edge::SE2(e) => {
-                let Node::SE2(x1) = graph.nodes.get(&e.from).unwrap() else {todo!()};
-                let Node::SE2(x2) = graph.nodes.get(&e.to).unwrap() else {todo!()};
+                let Some(Node::SE2(x1)) = graph.nodes.get(&e.from) else {todo!()};
+                let Some(Node::SE2(x2)) = graph.nodes.get(&e.to) else {todo!()};
 
                 let z = e.measurement;
 
@@ -705,8 +705,8 @@ mod tests {
 
         match &graph.edges[10] {
             Edge::SE2(e) => {
-                let Node::SE2(x1) = graph.nodes.get(&e.from).unwrap() else {todo!()};
-                let Node::SE2(x2) = graph.nodes.get(&e.to).unwrap() else {todo!()};
+                let Some(Node::SE2(x1)) = graph.nodes.get(&e.from) else {todo!()};
+                let Some(Node::SE2(x2)) = graph.nodes.get(&e.to) else {todo!()};
 
                 let z = e.measurement;
 
@@ -735,8 +735,8 @@ mod tests {
 
         match &graph.edges[1] {
             Edge::SE2_XY(edge) => {
-                let Node::SE2(x) = graph.nodes.get(&edge.from).unwrap() else {todo!()};
-                let Node::XY(landmark) = graph.nodes.get(&edge.to).unwrap() else {todo!()};
+                let Some(Node::SE2(x)) = graph.nodes.get(&edge.from) else {todo!()};
+                let Some(Node::XY(landmark)) = graph.nodes.get(&edge.to) else {todo!()};
 
                 let z = edge.measurement;
 
