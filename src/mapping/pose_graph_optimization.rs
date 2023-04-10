@@ -2,8 +2,8 @@
 #![allow(non_camel_case_types)]
 #![allow(clippy::deprecated_cfg_attr)]
 use nalgebra::{
-    DVector, Isometry2, Matrix2, Matrix2x3, Matrix3, SMatrix, SVector, Translation2, UnitComplex,
-    Vector2, Vector3,
+    DVector, Isometry2, Isometry3, Matrix2, Matrix2x3, Matrix3, SMatrix, SVector, Translation2,
+    UnitComplex, Vector2, Vector3,
 };
 use plotpy::{Curve, Plot};
 use rayon::prelude::*;
@@ -70,10 +70,10 @@ impl<T> EdgeSE2_XY<T> {
 
 #[derive(PartialEq)]
 pub enum Node {
-    SE2,
-    SE3,
-    XY,
-    XYZ,
+    SE2(Isometry2<f64>),
+    SE3(Isometry3<f64>),
+    XY(Vector2<f64>),
+    XYZ(Vector3<f64>),
 }
 pub struct PoseGraph {
     x: DVector<f64>,
@@ -169,6 +169,9 @@ fn solve_sparse(A: &SparseTriplet, b: &Vector) -> Result<DVector<f64>, Box<dyn E
 
 //     }
 // }
+fn iso(x: f64, y: f64, angle: f64) -> Isometry2<f64> {
+    Isometry2::from_parts(Translation2::new(x, y), UnitComplex::from_angle(angle))
+}
 
 impl PoseGraph {
     pub fn new(
@@ -192,6 +195,7 @@ impl PoseGraph {
         let mut edges = Vec::new();
         let mut lut = FxHashMap::default();
         let mut nodes = FxHashMap::default();
+        // let mut nodesX = FxHashMap::default();
         let mut offset = 0;
         let mut X = Vec::new();
 
@@ -203,7 +207,8 @@ impl PoseGraph {
                     let x = line[2].parse::<f64>()?;
                     let y = line[3].parse::<f64>()?;
                     let angle = line[4].parse::<f64>()?;
-                    nodes.insert(id, Node::SE2);
+                    // nodes.insert(id, Node::SE2);
+                    nodes.insert(id, Node::SE2(iso(x, y, angle)));
                     lut.insert(id, offset);
                     offset += 3;
                     X.extend_from_slice(&[x, y, angle]);
@@ -212,7 +217,8 @@ impl PoseGraph {
                     let id = line[1].parse::<u32>()?;
                     let x = line[2].parse::<f64>()?;
                     let y = line[3].parse::<f64>()?;
-                    nodes.insert(id, Node::XY);
+                    // nodes.insert(id, Node::XY);
+                    nodes.insert(id, Node::XY(Vector2::new(x, y)));
                     lut.insert(id, offset);
                     offset += 2;
                     X.extend_from_slice(&[x, y]);
@@ -241,9 +247,7 @@ impl PoseGraph {
                     let tri_4 = line[10].parse::<f64>()?;
                     let tri_5 = line[11].parse::<f64>()?;
 
-                    let translation = Translation2::new(x, y);
-                    let rotation = UnitComplex::from_angle(angle);
-                    let measurement = Isometry2::from_parts(translation, rotation);
+                    let measurement = iso(x, y, angle);
 
                     #[allow(clippy::deprecated_cfg_attr)]
                     #[cfg_attr(rustfmt, rustfmt_skip)]
@@ -292,10 +296,28 @@ impl PoseGraph {
         Ok(PoseGraph::new(
             DVector::from_vec(X),
             nodes,
+            // nodesX,
             edges,
             lut,
             name,
         ))
+    }
+
+    fn update_nodes(&mut self, dx: &DVector<f64>) {
+        self.nodes.par_iter_mut().for_each(|(id, node)| {
+            let offset = *self.lut.get(id).unwrap();
+            match node {
+                Node::SE2(node) => {
+                    let diff = dx.fixed_rows::<3>(offset);
+                    node.translation.vector += diff.xy();
+                    node.rotation *= UnitComplex::from_angle(diff.z);
+                }
+                Node::XY(node) => {
+                    *node += dx.fixed_rows::<2>(offset);
+                }
+                _ => todo!(),
+            }
+        });
     }
 
     pub fn optimize(
@@ -323,7 +345,8 @@ impl PoseGraph {
             let dx = self.linearize_and_solve()?;
             // let (H, b) = self.build_linear_system()?;
             // let dx = solve_sparse(&H, &b)?;
-            self.x += &dx;
+            self.update_nodes(&dx);
+            // self.x += &dx;
             let norm_dx = dx.norm();
             norms.push(norm_dx);
             errors.push(global_error(self));
@@ -359,16 +382,16 @@ impl PoseGraph {
                     let from_idx = *self.lut.get(&edge.from).unwrap();
                     let to_idx = *self.lut.get(&edge.to).unwrap();
 
-                    let x1 = isometry(&self.x, from_idx);
-                    let x2 = isometry(&self.x, to_idx);
+                    let Node::SE2(x1) = self.nodes.get(&edge.from).unwrap() else {todo!()};
+                    let Node::SE2(x2) = self.nodes.get(&edge.to).unwrap() else {todo!()};
 
-                    let z = edge.measurement;
-                    let omega = edge.information;
+                    let z = &edge.measurement;
+                    let omega = &edge.information;
 
-                    let e = pose_pose_constraint(&x1, &x2, &z);
-                    let (A, B) = linearize_pose_pose_constraint(&x1, &x2, &z);
+                    let e = pose_pose_constraint(x1, x2, z);
+                    let (A, B) = linearize_pose_pose_constraint(x1, x2, z);
 
-                    update_linear_system(&mut H, &mut b, &e, &A, &B, &omega, from_idx, to_idx)?;
+                    update_linear_system(&mut H, &mut b, &e, &A, &B, omega, from_idx, to_idx)?;
 
                     if need_to_add_prior {
                         H.put(from_idx, from_idx, 1000.0)?;
@@ -382,16 +405,16 @@ impl PoseGraph {
                     let from_idx = *self.lut.get(&edge.from).unwrap();
                     let to_idx = *self.lut.get(&edge.to).unwrap();
 
-                    let x = isometry(&self.x, from_idx);
-                    let landmark = self.x.fixed_rows::<2>(to_idx).into();
+                    let Node::SE2(x) = self.nodes.get(&edge.from).unwrap() else {todo!()};
+                    let Node::XY(landmark) = self.nodes.get(&edge.to).unwrap() else {todo!()};
 
-                    let z = edge.measurement;
-                    let omega = edge.information;
+                    let z = &edge.measurement;
+                    let omega = &edge.information;
 
-                    let e = pose_landmark_constraint(&x, &landmark, &z);
-                    let (A, B) = linearize_pose_landmark_constraint(&x, &landmark);
+                    let e = pose_landmark_constraint(x, landmark, z);
+                    let (A, B) = linearize_pose_landmark_constraint(x, landmark);
 
-                    update_linear_system(&mut H, &mut b, &e, &A, &B, &omega, from_idx, to_idx)?;
+                    update_linear_system(&mut H, &mut b, &e, &A, &B, omega, from_idx, to_idx)?;
                 }
                 Edge::SE3 => todo!(),
                 Edge::SE3_XYZ => todo!(),
@@ -424,19 +447,17 @@ impl PoseGraph {
         poses.points_begin();
         landmarks.points_begin();
         for (id, node) in self.nodes.iter() {
-            let idx = *self.lut.get(id).unwrap();
-            let xy = self.x.fixed_rows::<2>(idx);
             match *node {
-                Node::SE2 => {
-                    poses.points_add(xy.x, xy.y);
-                    poses_seq.push((id, xy));
+                Node::SE2(n) => {
+                    poses.points_add(n.translation.x, n.translation.y);
+                    poses_seq.push((id, n.translation.vector));
                 }
-                Node::XY => {
-                    landmarks.points_add(xy.x, xy.y);
+                Node::XY(n) => {
+                    landmarks.points_add(n.x, n.y);
                     landmarks_present = true;
                 }
-                Node::SE3 => todo!(),
-                Node::XYZ => todo!(),
+                Node::SE3(_) => todo!(),
+                Node::XYZ(_) => todo!(),
             }
         }
         poses.points_end();
@@ -540,46 +561,33 @@ fn linearize_pose_landmark_constraint(
     (A, B)
 }
 
-fn isometry(x: &DVector<f64>, idx: usize) -> Isometry2<f64> {
-    let p = x.fixed_rows::<3>(idx);
-    Isometry2::from_parts(Translation2::new(p.x, p.y), UnitComplex::from_angle(p.z))
-}
-
 fn global_error(graph: &PoseGraph) -> f64 {
     graph
         .edges
         .par_iter()
-        .map(|edge| {
-            match edge {
-                Edge::SE2(edge) => {
-                    let from_idx = *graph.lut.get(&edge.from).unwrap();
-                    let to_idx = *graph.lut.get(&edge.to).unwrap();
+        .map(|edge| match edge {
+            Edge::SE2(edge) => {
+                let Node::SE2(x1) = graph.nodes.get(&edge.from).unwrap() else {todo!()};
+                let Node::SE2(x2) = graph.nodes.get(&edge.to).unwrap() else {todo!()};
 
-                    let x1 = isometry(&graph.x, from_idx);
-                    let x2 = isometry(&graph.x, to_idx);
+                let z = &edge.measurement;
+                let omega = &edge.information;
 
-                    let z = edge.measurement;
-                    let omega = edge.information;
+                let e = pose_pose_constraint(x1, x2, z);
 
-                    let e = pose_pose_constraint(&x1, &x2, &z);
-
-                    (e.transpose() * omega * e).x
-                }
-                Edge::SE2_XY(edge) => {
-                    let from_idx = *graph.lut.get(&edge.from).unwrap();
-                    let to_idx = *graph.lut.get(&edge.to).unwrap();
-
-                    // TODO: change to only read the rotation, dont use translation anyway
-                    let x = isometry(&graph.x, from_idx);
-                    let l = graph.x.fixed_rows::<2>(to_idx);
-                    let z = edge.measurement;
-                    let omega = edge.information;
-                    let e = pose_landmark_constraint(&x, &l.into(), &z);
-                    (e.transpose() * omega * e).x
-                }
-                Edge::SE3 => todo!(),
-                Edge::SE3_XYZ => todo!(),
+                (e.transpose() * omega * e).x
             }
+            Edge::SE2_XY(edge) => {
+                let Node::SE2(x) = graph.nodes.get(&edge.from).unwrap() else {todo!()};
+                let Node::XY(l) = graph.nodes.get(&edge.to).unwrap() else {todo!()};
+
+                let z = &edge.measurement;
+                let omega = &edge.information;
+                let e = pose_landmark_constraint(x, l, z);
+                (e.transpose() * omega * e).x
+            }
+            Edge::SE3 => todo!(),
+            Edge::SE3_XYZ => todo!(),
         })
         .sum()
 }
@@ -676,11 +684,8 @@ mod tests {
 
         match &graph.edges[0] {
             Edge::SE2(e) => {
-                let from_idx = *graph.lut.get(&e.from).unwrap();
-                let to_idx = *graph.lut.get(&e.to).unwrap();
-
-                let x1 = isometry(&graph.x, from_idx);
-                let x2 = isometry(&graph.x, to_idx);
+                let Node::SE2(x1) = graph.nodes.get(&e.from).unwrap() else {todo!()};
+                let Node::SE2(x2) = graph.nodes.get(&e.to).unwrap() else {todo!()};
 
                 let z = e.measurement;
 
@@ -700,11 +705,8 @@ mod tests {
 
         match &graph.edges[10] {
             Edge::SE2(e) => {
-                let from_idx = *graph.lut.get(&e.from).unwrap();
-                let to_idx = *graph.lut.get(&e.to).unwrap();
-
-                let x1 = isometry(&graph.x, from_idx);
-                let x2 = isometry(&graph.x, to_idx);
+                let Node::SE2(x1) = graph.nodes.get(&e.from).unwrap() else {todo!()};
+                let Node::SE2(x2) = graph.nodes.get(&e.to).unwrap() else {todo!()};
 
                 let z = e.measurement;
 
@@ -733,15 +735,13 @@ mod tests {
 
         match &graph.edges[1] {
             Edge::SE2_XY(edge) => {
-                let from_idx = *graph.lut.get(&edge.from).unwrap();
-                let to_idx = *graph.lut.get(&edge.to).unwrap();
+                let Node::SE2(x) = graph.nodes.get(&edge.from).unwrap() else {todo!()};
+                let Node::XY(landmark) = graph.nodes.get(&edge.to).unwrap() else {todo!()};
 
-                let x = isometry(&graph.x, from_idx);
-                let landmark = graph.x.fixed_rows::<2>(to_idx);
                 let z = edge.measurement;
 
-                let e = pose_landmark_constraint(&x, &landmark.into(), &z);
-                let (A, B) = linearize_pose_landmark_constraint(&x, &landmark.into());
+                let e = pose_landmark_constraint(&x, &landmark, &z);
+                let (A, B) = linearize_pose_landmark_constraint(&x, &landmark);
 
                 let A_expected = Matrix2x3::new(0.0, 1.0, 0.358, -1., 0., -0.051);
 
