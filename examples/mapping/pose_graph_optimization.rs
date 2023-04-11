@@ -1,7 +1,7 @@
 use dialoguer::{theme::ColorfulTheme, Select};
 use std::error::Error;
 
-use robotics::mapping::pose_graph_optimization::PoseGraph;
+use robotics::mapping::g2o::parse_g2o;
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Create output directory if it didnt exist
@@ -33,7 +33,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .unwrap();
     let plot = plot == 0;
 
-    let mut graph = PoseGraph::from_g2o(filename.as_str())?;
+    let mut graph = parse_g2o(filename.as_str())?;
     graph.optimize(50, true, plot)?;
     Ok(())
 }
