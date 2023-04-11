@@ -66,20 +66,20 @@ pub fn parse_g2o(filename: &str) -> Result<PoseGraph, Box<dyn Error>> {
                 let x = line[3].parse::<f64>()?;
                 let y = line[4].parse::<f64>()?;
                 let angle = line[5].parse::<f64>()?;
-                let tri_0 = line[6].parse::<f64>()?;
-                let tri_1 = line[7].parse::<f64>()?;
-                let tri_2 = line[8].parse::<f64>()?;
-                let tri_3 = line[9].parse::<f64>()?;
-                let tri_4 = line[10].parse::<f64>()?;
-                let tri_5 = line[11].parse::<f64>()?;
+                let tri_11 = line[6].parse::<f64>()?;
+                let tri_12 = line[7].parse::<f64>()?;
+                let tri_13 = line[8].parse::<f64>()?;
+                let tri_22 = line[9].parse::<f64>()?;
+                let tri_23 = line[10].parse::<f64>()?;
+                let tri_33 = line[11].parse::<f64>()?;
 
                 let measurement = iso2(x, y, angle);
 
                 #[rustfmt::skip]
                 let information = Matrix3::new(
-                    tri_0, tri_1, tri_2,
-                    tri_1, tri_3, tri_4,
-                    tri_2, tri_4, tri_5
+                    tri_11, tri_12, tri_13,
+                    tri_12, tri_22, tri_23,
+                    tri_13, tri_23, tri_33
                 );
                 let edge = Edge::SE2(EdgeSE2::new(from, to, measurement, information));
                 edges.push(edge);
@@ -150,7 +150,7 @@ pub fn parse_g2o(filename: &str) -> Result<PoseGraph, Box<dyn Error>> {
                     tri_13, tri_23, tri_33, tri_34, tri_35, tri_36,
                     tri_14, tri_24, tri_34, tri_44, tri_45, tri_46,
                     tri_15, tri_25, tri_35, tri_45, tri_55, tri_56,
-                    tri_16, tri_26, tri_36, tri_46, tri_55, tri_66
+                    tri_16, tri_26, tri_36, tri_46, tri_56, tri_66
                 );
 
                 let edge = Edge::SE3(EdgeSE3::new(from, to, measurement, information));
