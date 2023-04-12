@@ -10,17 +10,7 @@ use crate::utils::state::GaussianState;
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct UnscentedKalmanFilter<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, Z>
-        + Allocator<T, S, S>
-        + Allocator<T, Z, Z>
-        + Allocator<T, Z, S>
-        + Allocator<T, S, U>
-        + Allocator<T, U, U>
-        + Allocator<T, S, Z>
-        + Allocator<T, Const<1>, S>
-        + Allocator<T, Const<1>, Z>,
+    DefaultAllocator: Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Z, Z>,
 {
     q: OMatrix<T, S, S>,
     r: OMatrix<T, Z, Z>,
@@ -34,17 +24,7 @@ where
 
 impl<T: RealField + Copy, S: Dim, Z: Dim, U: Dim> UnscentedKalmanFilter<T, S, Z, U>
 where
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, Z>
-        + Allocator<T, S, S>
-        + Allocator<T, Z, Z>
-        + Allocator<T, Z, S>
-        + Allocator<T, S, U>
-        + Allocator<T, U, U>
-        + Allocator<T, S, Z>
-        + Allocator<T, Const<1>, S>
-        + Allocator<T, Const<1>, Z>,
+    DefaultAllocator: Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Z, Z>,
 {
     #[allow(clippy::too_many_arguments)]
     pub fn new(

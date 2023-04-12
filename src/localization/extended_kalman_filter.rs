@@ -1,4 +1,4 @@
-use nalgebra::{allocator::Allocator, Const, DefaultAllocator, Dim, OMatrix, OVector, RealField};
+use nalgebra::{allocator::Allocator, DefaultAllocator, Dim, OMatrix, OVector, RealField};
 use rustc_hash::FxHashMap;
 
 use crate::localization::bayesian_filter::BayesianFilter;
@@ -9,17 +9,7 @@ use crate::utils::state::GaussianState;
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct ExtendedKalmanFilter<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, Z>
-        + Allocator<T, S, S>
-        + Allocator<T, Z, Z>
-        + Allocator<T, Z, S>
-        + Allocator<T, S, U>
-        + Allocator<T, U, U>
-        + Allocator<T, S, Z>
-        + Allocator<T, Const<1>, S>
-        + Allocator<T, Const<1>, Z>,
+    DefaultAllocator: Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Z, Z>,
 {
     r: OMatrix<T, S, S>,
     q: OMatrix<T, Z, Z>,
@@ -30,17 +20,7 @@ where
 
 impl<T: RealField, S: Dim, Z: Dim, U: Dim> ExtendedKalmanFilter<T, S, Z, U>
 where
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, Z>
-        + Allocator<T, S, S>
-        + Allocator<T, Z, Z>
-        + Allocator<T, Z, S>
-        + Allocator<T, S, U>
-        + Allocator<T, U, U>
-        + Allocator<T, S, Z>
-        + Allocator<T, Const<1>, S>
-        + Allocator<T, Const<1>, Z>,
+    DefaultAllocator: Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Z, Z>,
 {
     pub fn new(
         r: OMatrix<T, S, S>,
@@ -70,17 +50,9 @@ where
         + Allocator<T, Z, S>
         + Allocator<T, S, U>
         + Allocator<T, U, U>
-        + Allocator<T, S, Z>
-        + Allocator<T, Const<1>, S>
-        + Allocator<T, Const<1>, Z>,
+        + Allocator<T, S, Z>,
 {
-    fn update_estimate(
-        &mut self,
-        // estimate: &GaussianState<T, S>,
-        u: &OVector<T, U>,
-        z: &OVector<T, Z>,
-        dt: T,
-    ) {
+    fn update_estimate(&mut self, u: &OVector<T, U>, z: &OVector<T, Z>, dt: T) {
         // predict
         let g = self
             .motion_model
@@ -111,18 +83,7 @@ where
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct ExtendedKalmanFilterKnownCorrespondences<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, Z>
-        + Allocator<T, S, S>
-        + Allocator<T, Z, Z>
-        + Allocator<T, Z, S>
-        + Allocator<T, S, U>
-        + Allocator<T, U, U>
-        + Allocator<T, S, Z>
-        + Allocator<T, Const<1>, S>
-        + Allocator<T, Const<1>, Z>
-        + Allocator<T, U, S>,
+    DefaultAllocator: Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Z, Z>,
 {
     r: OMatrix<T, S, S>,
     q: OMatrix<T, Z, Z>,
@@ -143,8 +104,6 @@ where
         + Allocator<T, S, U>
         + Allocator<T, U, U>
         + Allocator<T, S, Z>
-        + Allocator<T, Const<1>, S>
-        + Allocator<T, Const<1>, Z>
         + Allocator<T, U, S>,
 {
     pub fn new(

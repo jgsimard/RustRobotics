@@ -13,17 +13,7 @@ use crate::utils::state::GaussianState;
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct ParticleFilter<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, Z>
-        + Allocator<T, S, S>
-        + Allocator<T, Z, Z>
-        + Allocator<T, Z, S>
-        + Allocator<T, S, U>
-        + Allocator<T, U, U>
-        + Allocator<T, S, Z>
-        + Allocator<T, Const<1>, S>
-        + Allocator<T, Const<1>, Z>,
+    DefaultAllocator: Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Z, Z>,
 {
     r: OMatrix<T, S, S>,
     q: OMatrix<T, Z, Z>,
@@ -37,14 +27,8 @@ where
     StandardNormal: Distribution<T>,
     Standard: Distribution<T>,
     DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, Z>
         + Allocator<T, S, S>
         + Allocator<T, Z, Z>
-        + Allocator<T, Z, S>
-        + Allocator<T, S, U>
-        + Allocator<T, U, U>
-        + Allocator<T, S, Z>
         + Allocator<T, Const<1>, S>
         + Allocator<T, Const<1>, Z>,
 {
@@ -83,7 +67,6 @@ where
         + Allocator<T, Z, S>
         + Allocator<T, S, U>
         + Allocator<T, U, U>
-        + Allocator<T, S, Z>
         + Allocator<T, Const<1>, S>
         + Allocator<T, Const<1>, Z>,
     Standard: Distribution<T>,
@@ -137,17 +120,7 @@ where
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct ParticleFilterKnownCorrespondences<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, Z>
-        + Allocator<T, S, S>
-        + Allocator<T, Z, Z>
-        + Allocator<T, Z, S>
-        + Allocator<T, S, U>
-        + Allocator<T, U, U>
-        + Allocator<T, S, Z>
-        + Allocator<T, Const<1>, S>
-        + Allocator<T, Const<1>, Z>,
+    DefaultAllocator: Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Z, Z>,
 {
     q: OMatrix<T, Z, Z>,
     landmarks: FxHashMap<u32, OVector<T, S>>,
@@ -168,7 +141,6 @@ where
         + Allocator<T, Z, S>
         + Allocator<T, S, U>
         + Allocator<T, U, U>
-        + Allocator<T, S, Z>
         + Allocator<T, Const<1>, S>
         + Allocator<T, Const<1>, Z>,
 {
