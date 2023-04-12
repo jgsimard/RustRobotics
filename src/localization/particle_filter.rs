@@ -259,13 +259,14 @@ where
     DefaultAllocator: Allocator<T, S>,
     Standard: Distribution<T>,
 {
-    let mut weight_tot = T::zero();
-    let cum_weight: Vec<T> = (0..particules.len())
-        .map(|i| {
-            weight_tot += weights[i];
-            weight_tot
+    let cum_weight: Vec<T> = weights
+        .iter()
+        .scan(T::zero(), |state, &x| {
+            *state += x;
+            Some(*state)
         })
         .collect();
+    let weight_tot = *cum_weight.last().unwrap();
 
     // sampling
     let mut rng = rand::thread_rng();
