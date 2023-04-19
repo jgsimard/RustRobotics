@@ -5,10 +5,9 @@ use rand_distr::{Distribution, Normal};
 use std::error::Error;
 
 extern crate robotics;
-use robotics::localization::bayesian_filter::BayesianFilter;
-use robotics::localization::extended_kalman_filter::ExtendedKalmanFilter;
-use robotics::localization::particle_filter::ParticleFilter;
-use robotics::localization::unscented_kalman_filter::UnscentedKalmanFilter;
+use robotics::localization::{
+    BayesianFilter, ExtendedKalmanFilter, ParticleFilter, UnscentedKalmanFilter,
+};
 use robotics::models::measurement::{MeasurementModel, SimpleProblemMeasurementModel};
 use robotics::models::motion::{MotionModel, SimpleProblemMotionModel};
 use robotics::utils::deg2rad;

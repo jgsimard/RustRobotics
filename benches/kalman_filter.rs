@@ -2,9 +2,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 use nalgebra::{Const, Matrix4, Vector2, Vector4};
 extern crate robotics;
-use crate::robotics::localization::bayesian_filter::BayesianFilter;
-use robotics::localization::extended_kalman_filter::ExtendedKalmanFilter;
-use robotics::localization::unscented_kalman_filter::UnscentedKalmanFilter;
+use robotics::localization::{BayesianFilter, ExtendedKalmanFilter, UnscentedKalmanFilter};
 use robotics::models::measurement::SimpleProblemMeasurementModel;
 use robotics::models::motion::SimpleProblemMotionModel;
 use robotics::utils::deg2rad;

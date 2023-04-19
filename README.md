@@ -8,8 +8,7 @@ This package is a rust implementation of robotics algorithms. So far, the main s
   - [Table of Contents](#table-of-contents)
   - [Localization](#localization)
     - [Extended Kalman Filter + Unscented Kalman Filter + Particle Filter](#extended-kalman-filter--unscented-kalman-filter--particle-filter)
-    - [Extended Kalman Filter With Landmarks](#extended-kalman-filter-with-landmarks)
-    - [Particle Filter With Landmarks](#particle-filter-with-landmarks)
+    - [EKF/PF With Landmarks](#ekfpf-with-landmarks)
   - [Mapping](#mapping)
     - [Pose Graph Optimization](#pose-graph-optimization)
   - [Todo](#todo)
@@ -25,28 +24,19 @@ This package is a rust implementation of robotics algorithms. So far, the main s
 cargo run --example localization
 ```
 
+### EKF/PF With Landmarks
 
-### Extended Kalman Filter With Landmarks
-
-[Algorithm](src/localization/extended_kalman_filter.rs), [Example](examples/localization/extended_kalman_filter_landmarks.rs)
-
-```bash
-cargo run --example ekf_lm
-```
-
-### Particle Filter With Landmarks
-
-[Algorithm](src/localization/particle_filter.rs), [Example](examples/localization/particle_filter.rs)
+[Example](examples/localization/localization_landmarks.rs)
 
 ```bash
-cargo run --example pf_lm
+cargo run --example localization_landmarks
 ```
 
 ## Mapping
 
 ### Pose Graph Optimization
 
-This algorithm uses the sparse solver in [Russel](https://github.com/cpmech/russell/tree/main/russell_sparse) so follow the installation instructions. [Algorithm](src/mapping/pose_graph_optimization.rs), [Example](examples/mapping/pose_graph_optimization.rs), [Source](https://www.researchgate.net/profile/Mohamed-Mourad-Lafifi/post/What_is_the_relationship_between_GraphSLAM_and_Pose_Graph_SLAM/attachment/613b3f63647f3906fc978272/AS%3A1066449581928450%401631272802870/download/A+tutorial+on+graph-based+SLAM+_+Grisetti2010.pdf)
+This algorithm uses the sparse solver in [Russel](https://github.com/cpmech/russell/tree/main/russell_sparse) which wraps [SuiteSparse](https://people.engr.tamu.edu/davis/suitesparse.html) so follow the installation instructions. [Algorithm](src/mapping/pose_graph_optimization.rs), [Example](examples/mapping/pose_graph_optimization.rs), [Source](https://www.researchgate.net/profile/Mohamed-Mourad-Lafifi/post/What_is_the_relationship_between_GraphSLAM_and_Pose_Graph_SLAM/attachment/613b3f63647f3906fc978272/AS%3A1066449581928450%401631272802870/download/A+tutorial+on+graph-based+SLAM+_+Grisetti2010.pdf)
 
 ```bash
 cargo run --example pose_graph_optimization
@@ -79,8 +69,9 @@ cargo run --example pose_graph_optimization
 
 ## Sources
 
-[Probabilistic Robotics](https://mitpress.mit.edu/9780262201629/probabilistic-robotics/)
-[PythonRobotics](https://github.com/AtsushiSakai/PythonRobotics)
-[Underactuated Robotics](https://underactuated.mit.edu/index.html)
-[Probabilistic-Robotics-Algorithms](https://github.com/ChengeYang/Probabilistic-Robotics-Algorithms)
-[A tutorial on Graph-Based SLAM](https://www.researchgate.net/profile/Mohamed-Mourad-Lafifi/post/What_is_the_relationship_between_GraphSLAM_and_Pose_Graph_SLAM/attachment/613b3f63647f3906fc978272/AS%3A1066449581928450%401631272802870/download/A+tutorial+on+graph-based+SLAM+_+Grisetti2010.pdf)
+- [Probabilistic Robotics](https://mitpress.mit.edu/9780262201629/probabilistic-robotics/)
+- [PythonRobotics](https://github.com/AtsushiSakai/PythonRobotics)
+- [Underactuated Robotics](https://underactuated.mit.edu/index.html)
+- [Probabilistic-Robotics-Algorithms](https://github.com/ChengeYang/Probabilistic-Robotics-Algorithms)
+- [A tutorial on Graph-Based SLAM](https://www.researchgate.net/profile/Mohamed-Mourad-Lafifi/post/What_is_the_relationship_between_GraphSLAM_and_Pose_Graph_SLAM/attachment/613b3f63647f3906fc978272/AS%3A1066449581928450%401631272802870/download/A+tutorial+on+graph-based+SLAM+_+Grisetti2010.pdf)
+- [A tutorial on SE(3) transformation parameterizations and on-manifold optimization](https://arxiv.org/abs/2103.15980)

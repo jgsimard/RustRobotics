@@ -1,13 +1,14 @@
+#![allow(non_camel_case_types)]
+
 use nalgebra::{
     Isometry2, Isometry3, Matrix2, Matrix3, Matrix6, Quaternion, Translation2, Translation3,
-    UnitComplex, UnitQuaternion, Vector2, Vector4,
+    UnitComplex, UnitQuaternion, Vector2,
 };
 use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 
-use crate::mapping::pose_graph_optimization::{
-    Edge, EdgeSE2, EdgeSE2_XY, EdgeSE3, Node, PoseGraph,
-};
+use crate::mapping::pose_graph_optimization::{Edge, EdgeSE2, EdgeSE2_XY, EdgeSE3, Node};
 
 fn iso2(x: f64, y: f64, angle: f64) -> Isometry2<f64> {
     Isometry2::from_parts(Translation2::new(x, y), UnitComplex::from_angle(angle))
@@ -15,19 +16,37 @@ fn iso2(x: f64, y: f64, angle: f64) -> Isometry2<f64> {
 
 fn iso3(x: f64, y: f64, z: f64, qx: f64, qy: f64, qz: f64, qw: f64) -> Isometry3<f64> {
     let translation = Translation3::new(x, y, z);
-    let rotation =
-        UnitQuaternion::from_quaternion(Quaternion::from_vector(Vector4::new(qx, qy, qz, qw)));
+    let rotation = UnitQuaternion::from_quaternion(Quaternion::new(qx, qy, qz, qw));
     Isometry3::from_parts(translation, rotation)
 }
 
-pub fn parse_g2o(filename: &str) -> Result<PoseGraph, Box<dyn Error>> {
+#[derive(Serialize, Deserialize, Debug)]
+struct VERTEX_SE2 {
+    id: u32,
+    x: f64,
+    y: f64,
+    z: f64,
+}
+
+#[allow(clippy::type_complexity)]
+pub fn parse_g2o(
+    filename: &str,
+) -> Result<
+    (
+        usize,
+        Vec<Edge<f64>>,
+        FxHashMap<u32, usize>,
+        FxHashMap<u32, Node>,
+    ),
+    Box<dyn Error>,
+> {
     let mut edges = Vec::new();
     let mut lut = FxHashMap::default();
     let mut nodes = FxHashMap::default();
     let mut offset = 0;
 
     for line in std::fs::read_to_string(filename)?.lines() {
-        let line: Vec<&str> = line.split(' ').collect();
+        let line: Vec<&str> = line.split(' ').filter(|x| !x.is_empty()).collect();
         match line[0] {
             "VERTEX_SE2" => {
                 let id = line[1].parse::<u32>()?;
@@ -81,7 +100,7 @@ pub fn parse_g2o(filename: &str) -> Result<PoseGraph, Box<dyn Error>> {
                     tri_12, tri_22, tri_23,
                     tri_13, tri_23, tri_33
                 );
-                let edge = Edge::SE2(EdgeSE2::new(from, to, measurement, information));
+                let edge = Edge::SE2_SE2(EdgeSE2::new(from, to, measurement, information));
                 edges.push(edge);
             }
             "EDGE_SE2_XY" => {
@@ -109,7 +128,6 @@ pub fn parse_g2o(filename: &str) -> Result<PoseGraph, Box<dyn Error>> {
                 let line: Vec<f64> = line
                     .iter()
                     .skip(3)
-                    .filter(|x| !x.is_empty())
                     .map(|x| x.parse::<f64>().unwrap())
                     .collect();
                 let x = line[0];
@@ -153,21 +171,14 @@ pub fn parse_g2o(filename: &str) -> Result<PoseGraph, Box<dyn Error>> {
                     tri_16, tri_26, tri_36, tri_46, tri_56, tri_66
                 );
 
-                let edge = Edge::SE3(EdgeSE3::new(from, to, measurement, information));
+                let edge = Edge::SE3_SE3(EdgeSE3::new(from, to, measurement, information));
                 edges.push(edge);
             }
             _ => unimplemented!("{}", line[0]),
         }
     }
-    let name = filename
-        .split('/')
-        .last()
-        .unwrap()
-        .split('.')
-        .next()
-        .unwrap()
-        .to_string();
-    Ok(PoseGraph::new(offset, nodes, edges, lut, name))
+
+    Ok((offset, edges, lut, nodes))
 }
 
 #[cfg(test)]
@@ -177,28 +188,28 @@ mod tests {
     #[test]
     fn from_g2o() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-pose.g2o";
-        let graph = parse_g2o(filename)?;
-        assert_eq!(400, graph.nodes.len());
-        assert_eq!(1773, graph.edges.len());
-        assert_eq!(1200, graph.len);
+        let (len, edges, _lut, nodes) = parse_g2o(filename)?;
+        assert_eq!(400, nodes.len());
+        assert_eq!(1773, edges.len());
+        assert_eq!(1200, len);
 
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let graph = parse_g2o(filename)?;
-        assert_eq!(77, graph.nodes.len());
-        assert_eq!(297, graph.edges.len());
-        assert_eq!(195, graph.len);
+        let (len, edges, _lut, nodes) = parse_g2o(filename)?;
+        assert_eq!(77, nodes.len());
+        assert_eq!(297, edges.len());
+        assert_eq!(195, len);
 
         let filename = "dataset/g2o/intel.g2o";
-        let graph = parse_g2o(filename)?;
-        assert_eq!(1728, graph.nodes.len());
-        assert_eq!(4830, graph.edges.len());
-        assert_eq!(5184, graph.len);
+        let (len, edges, _lut, nodes) = parse_g2o(filename)?;
+        assert_eq!(1728, nodes.len());
+        assert_eq!(4830, edges.len());
+        assert_eq!(5184, len);
 
         let filename = "dataset/g2o/dlr.g2o";
-        let graph = parse_g2o(filename)?;
-        assert_eq!(3873, graph.nodes.len());
-        assert_eq!(17605, graph.edges.len());
-        assert_eq!(11043, graph.len);
+        let (len, edges, _lut, nodes) = parse_g2o(filename)?;
+        assert_eq!(3873, nodes.len());
+        assert_eq!(17605, edges.len());
+        assert_eq!(11043, len);
         Ok(())
     }
 }

@@ -1,4 +1,9 @@
-pub mod bayesian_filter;
-pub mod extended_kalman_filter;
-pub mod particle_filter;
-pub mod unscented_kalman_filter;
+mod bayesian_filter;
+mod extended_kalman_filter;
+mod particle_filter;
+mod unscented_kalman_filter;
+
+pub use bayesian_filter::{BayesianFilter, BayesianFilterKnownCorrespondences};
+pub use extended_kalman_filter::{ExtendedKalmanFilter, ExtendedKalmanFilterKnownCorrespondences};
+pub use particle_filter::{ParticleFilter, ParticleFilterKnownCorrespondences};
+pub use unscented_kalman_filter::UnscentedKalmanFilter;

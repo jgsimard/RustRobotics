@@ -1,17 +1,33 @@
-use nalgebra::{Matrix2, Matrix3, Vector2, Vector3};
-
+use dialoguer::{theme::ColorfulTheme, Select};
+use nalgebra::{Const, Matrix2, Matrix3, Vector2, Vector3};
 use rustc_hash::FxHashMap;
 use std::error::Error;
 
 extern crate robotics;
 use robotics::data::utias::UtiasDataset;
-use robotics::localization::particle_filter::ParticleFilterKnownCorrespondences;
+use robotics::localization::BayesianFilterKnownCorrespondences;
+use robotics::localization::{
+    ExtendedKalmanFilterKnownCorrespondences, ParticleFilterKnownCorrespondences,
+};
 use robotics::models::measurement::RangeBearingMeasurementModel;
 use robotics::models::motion::Velocity;
 use robotics::utils::plot::plot_landmarks;
 use robotics::utils::state::GaussianState;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let algos = &[
+        "Extended Kalman Filter (EKF)",
+        "Unscented Kalman Filter (UKF)",
+        "Particle Filter (PF)",
+    ];
+    let algo_idx = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt("Pick localization algorithm")
+        .default(0)
+        .items(&algos[..])
+        .interact()
+        .unwrap();
+    // let algo = algos[algo_idx];
+
     let dataset = UtiasDataset::new(0)?;
     let mut landmarks = FxHashMap::default();
     for (id, lm) in &dataset.landmarks {
@@ -33,15 +49,29 @@ fn main() -> Result<(), Box<dyn Error>> {
         cov: Matrix3::<f64>::from_diagonal(&Vector3::new(1e-10, 1e-10, 1e-10)),
     };
 
-    let mut particle_filter = ParticleFilterKnownCorrespondences::new(
-        r,
-        q,
-        landmarks,
-        measurement_model,
-        motion_model,
-        state,
-        300,
-    );
+    let mut bayes_filter: Box<
+        dyn BayesianFilterKnownCorrespondences<f64, Const<3>, Const<2>, Const<2>>,
+    > = match algo_idx {
+        0 => Box::new(ExtendedKalmanFilterKnownCorrespondences::new(
+            q,
+            landmarks,
+            measurement_model,
+            motion_model,
+            state,
+        )),
+        1 => todo!(),
+        2 => Box::new(ParticleFilterKnownCorrespondences::new(
+            r,
+            q,
+            landmarks,
+            measurement_model,
+            motion_model,
+            state,
+            300,
+        )),
+        _ => unreachable!(),
+    };
+
     let mut time_past = gt_state.time;
 
     let mut states = Vec::new();
@@ -66,22 +96,28 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let odometry = odometry.map(|od| Vector2::new(od.forward_velocity, od.angular_velocity));
 
-        particle_filter.estimate(odometry, measurements, dt);
+        bayes_filter.update_estimate(odometry, measurements, dt);
 
-        states.push(particle_filter.gaussian_estimate());
+        states.push(bayes_filter.gaussian_estimate());
         if measurement_update {
             states_measurement.push(states.last().unwrap().clone())
         }
     }
     println!("measurement updates = {}", states_measurement.len());
 
+    let (path, name) = match algo_idx {
+        0 => ("ekf_landmarks", "EKF landmarks"),
+        1 => todo!(),
+        2 => ("pf_landmarks", "Particle Filter (Monte Carlo) landmarks"),
+        _ => unreachable!(),
+    };
     plot_landmarks(
         &dataset,
         &states,
         &states_measurement,
         time_past,
-        "./img/pf_landmarks.png",
-        "Particle Filter (Monte Carlo) landmarks",
+        format!("./img/{path}.png").as_str(),
+        name,
     )?;
 
     Ok(())

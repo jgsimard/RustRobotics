@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 
 extern crate robotics;
-use robotics::mapping::pose_graph_optimization::PoseGraph;
+use robotics::mapping::PoseGraph;
 
 fn graph_slam_intel(b: &mut Criterion) {
     b.bench_function("graph_slam_intel", |b| {

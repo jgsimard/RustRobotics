@@ -4,7 +4,7 @@ use rand::Rng;
 use rand_distr::{Standard, StandardNormal};
 use rustc_hash::FxHashMap;
 
-use crate::localization::bayesian_filter::BayesianFilter;
+use crate::localization::bayesian_filter::{BayesianFilter, BayesianFilterKnownCorrespondences};
 use crate::models::measurement::MeasurementModel;
 use crate::models::motion::MotionModel;
 use crate::utils::mvn::MultiVariateNormal;
@@ -133,16 +133,8 @@ impl<T: RealField + Copy, S: Dim, Z: Dim, U: Dim> ParticleFilterKnownCorresponde
 where
     StandardNormal: Distribution<T>,
     Standard: Distribution<T>,
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, Z>
-        + Allocator<T, S, S>
-        + Allocator<T, Z, Z>
-        + Allocator<T, Z, S>
-        + Allocator<T, S, U>
-        + Allocator<T, U, U>
-        + Allocator<T, Const<1>, S>
-        + Allocator<T, Const<1>, Z>,
+    DefaultAllocator:
+        Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Z, Z> + Allocator<T, Const<1>, S>,
 {
     pub fn new(
         initial_noise: OMatrix<T, S, S>,
@@ -167,8 +159,25 @@ where
             particules,
         }
     }
+}
 
-    pub fn estimate(
+impl<T: RealField + Copy, S: Dim, Z: Dim, U: Dim> BayesianFilterKnownCorrespondences<T, S, Z, U>
+    for ParticleFilterKnownCorrespondences<T, S, Z, U>
+where
+    StandardNormal: Distribution<T>,
+    Standard: Distribution<T>,
+    DefaultAllocator: Allocator<T, S>
+        + Allocator<T, U>
+        + Allocator<T, Z>
+        + Allocator<T, S, S>
+        + Allocator<T, Z, Z>
+        + Allocator<T, Z, S>
+        + Allocator<T, S, U>
+        + Allocator<T, U, U>
+        + Allocator<T, Const<1>, S>
+        + Allocator<T, Const<1>, Z>,
+{
+    fn update_estimate(
         &mut self,
         control: Option<OVector<T, U>>,
         measurements: Option<Vec<(u32, OVector<T, Z>)>>,
@@ -205,7 +214,7 @@ where
         }
     }
 
-    pub fn gaussian_estimate(&self) -> GaussianState<T, S> {
+    fn gaussian_estimate(&self) -> GaussianState<T, S> {
         let shape = self.particules[0].shape_generic();
         let x = self
             .particules

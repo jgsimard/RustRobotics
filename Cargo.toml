@@ -50,14 +50,9 @@ debug = true
 name = "localization"
 path = "examples/localization/bayesian_filter.rs"
 
-
 [[example]]
-name = "ekf_lm"
-path = "examples/localization/extended_kalman_filter_landmarks.rs"
-
-[[example]]
-name = "pf_lm"
-path = "examples/localization/particle_filter.rs"
+name = "localization_landmarks"
+path = "examples/localization/localization_landmarks.rs"
 
 [[example]]
 name = "pose_graph_optimization"
@@ -68,6 +63,6 @@ path = "examples/mapping/pose_graph_optimization.rs"
 name = "kalman_filter"
 harness = false
 
-[[bench]]
-name = "graph_slam"
-harness = false
+# [[bench]]
+# name = "graph_slam"
+# harness = false

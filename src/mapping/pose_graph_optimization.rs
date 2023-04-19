@@ -2,8 +2,8 @@
 #![allow(non_camel_case_types)]
 #![allow(dead_code)] // TODO: remove this
 use nalgebra::{
-    DVector, Isometry2, Isometry3, Matrix2, Matrix2x3, Matrix3, Matrix6, SMatrix, SVector,
-    UnitComplex, Vector2, Vector3,
+    AbstractRotation, DVector, Isometry, Isometry2, Isometry3, Matrix2, Matrix2x3, Matrix3,
+    Matrix6, SMatrix, SVector, UnitComplex, Vector2, Vector3,
 };
 use plotpy::{Curve, Plot};
 use rayon::prelude::*;
@@ -12,12 +12,21 @@ use russell_sparse::{ConfigSolver, Solver, SparseTriplet, Symmetry};
 use rustc_hash::FxHashMap;
 use std::error::Error;
 
+use crate::mapping::g2o::parse_g2o;
+use crate::mapping::se2_se3::{jacobian_so3, skew, skew_m_and_mult_parts};
+
 #[derive(Debug)]
 pub enum Edge<T> {
-    SE2(EdgeSE2<T>),
+    SE2_SE2(EdgeSE2<T>),
     SE2_XY(EdgeSE2_XY<T>),
-    SE3(EdgeSE3<T>),
+    SE3_SE3(EdgeSE3<T>),
     SE3_XYZ,
+}
+
+#[derive(PartialEq)]
+pub enum PoseGraphSolver {
+    GaussNewton,
+    LevenbergMarquardt,
 }
 
 #[derive(Debug)]
@@ -92,6 +101,7 @@ impl<T> EdgeSE3<T> {
     }
 }
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(PartialEq)]
 pub enum Node {
     SE2(Isometry2<f64>),
@@ -100,17 +110,19 @@ pub enum Node {
     XYZ(Vector3<f64>),
 }
 pub struct PoseGraph {
-    pub len: usize,
-    pub nodes: FxHashMap<u32, Node>,
-    pub edges: Vec<Edge<f64>>,
-    pub lut: FxHashMap<u32, usize>,
-    pub iteration: usize,
-    pub name: String,
+    len: usize,
+    nodes: FxHashMap<u32, Node>,
+    edges: Vec<Edge<f64>>,
+    lut: FxHashMap<u32, usize>,
+    iteration: usize,
+    name: String,
+    solver: PoseGraphSolver,
 }
 
 #[allow(clippy::too_many_arguments)]
 fn update_linear_system<const X1: usize, const X2: usize>(
-    H: &mut SparseTriplet,
+    // H: &mut SparseTriplet,
+    H: &mut FxHashMap<(usize, usize), f64>,
     b: &mut Vector,
     e: &SVector<f64, X2>,
     A: &SMatrix<f64, X2, X1>,
@@ -139,15 +151,29 @@ fn update_linear_system<const X1: usize, const X2: usize>(
     Ok(())
 }
 
+fn update(
+    hash_map: &mut FxHashMap<(usize, usize), f64>,
+    i: usize,
+    j: usize,
+    v: f64,
+) -> Result<(), Box<dyn Error>> {
+    if let Some(x) = hash_map.get_mut(&(i, j)) {
+        *x += v;
+    } else {
+        hash_map.insert((i, j), v);
+    }
+    Ok(())
+}
+
 fn set_matrix<const R: usize, const C: usize>(
-    trip: &mut SparseTriplet,
+    hash_map: &mut FxHashMap<(usize, usize), f64>,
     i: usize,
     j: usize,
     m: &SMatrix<f64, R, C>,
 ) -> Result<(), Box<dyn Error>> {
     for ii in 0..R {
         for jj in 0..C {
-            trip.put(i + ii, j + jj, m.fixed_view::<1, 1>(ii, jj).x)?
+            update(hash_map, i + ii, j + jj, m.fixed_view::<1, 1>(ii, jj).x)?;
         }
     }
     Ok(())
@@ -173,21 +199,46 @@ fn solve_sparse(A: &SparseTriplet, b: &Vector) -> Result<DVector<f64>, Box<dyn E
 }
 
 impl PoseGraph {
-    pub fn new(
-        len: usize,
-        nodes: FxHashMap<u32, Node>,
-        edges: Vec<Edge<f64>>,
-        lut: FxHashMap<u32, usize>,
-        name: String,
-    ) -> PoseGraph {
-        PoseGraph {
+    pub fn from_g2o(filename: &str) -> Result<PoseGraph, Box<dyn Error>> {
+        let (len, edges, lut, nodes) = parse_g2o(filename)?;
+        let name = filename
+            .split('/')
+            .last()
+            .unwrap()
+            .split('.')
+            .next()
+            .unwrap()
+            .to_string();
+        Ok(PoseGraph {
             len,
             nodes,
             edges,
             lut,
             iteration: 0,
             name,
-        }
+            solver: PoseGraphSolver::GaussNewton,
+        })
+    }
+
+    pub fn new(filename: &str, solver: PoseGraphSolver) -> Result<PoseGraph, Box<dyn Error>> {
+        let (len, edges, lut, nodes) = parse_g2o(filename)?;
+        let name = filename
+            .split('/')
+            .last()
+            .unwrap()
+            .split('.')
+            .next()
+            .unwrap()
+            .to_string();
+        Ok(PoseGraph {
+            len,
+            nodes,
+            edges,
+            lut,
+            iteration: 0,
+            name,
+            solver,
+        })
     }
 
     fn update_nodes(&mut self, dx: &DVector<f64>) {
@@ -217,8 +268,10 @@ impl PoseGraph {
         plot: bool,
     ) -> Result<Vec<f64>, Box<dyn Error>> {
         let tolerance = 1e-4;
+        let mut lambda = 0.01;
         let mut norms = Vec::new();
-        let mut errors = vec![global_error(self)];
+        let mut last_error = global_error(self);
+        let mut errors = vec![last_error];
         if log {
             println!(
                 "Loaded graph with {} nodes and {} edges",
@@ -232,14 +285,25 @@ impl PoseGraph {
         }
         for i in 0..num_iterations {
             self.iteration += 1;
-            let dx = self.linearize_and_solve()?;
-            // let (H, b) = self.build_linear_system()?;
-            // let dx = solve_sparse(&H, &b)?;
+            // let dx = self.linearize_and_solve()?;
+            let (H, b) = self.build_linear_system(lambda)?;
+            let dx = solve_sparse(&H, &b)?;
             self.update_nodes(&dx);
             // self.x += &dx;
             let norm_dx = dx.norm();
+            let error = global_error(self);
+            if self.solver == PoseGraphSolver::LevenbergMarquardt {
+                if last_error < error {
+                    self.update_nodes(&(-dx)); // get back old state
+                    lambda *= 2.0;
+                } else {
+                    lambda /= 2.0;
+                }
+            }
+
+            last_error = error;
             norms.push(norm_dx);
-            errors.push(global_error(self));
+            errors.push(error);
 
             if log {
                 println!(
@@ -258,15 +322,15 @@ impl PoseGraph {
         Ok(errors)
     }
 
-    fn build_linear_system(&self) -> Result<(SparseTriplet, Vector), Box<dyn Error>> {
-        let mut H = SparseTriplet::new(self.len, self.len, self.len * self.len, Symmetry::General)?;
+    fn build_linear_system(&self, lambda: f64) -> Result<(SparseTriplet, Vector), Box<dyn Error>> {
+        let mut H_hash_map = FxHashMap::default();
         let mut b = Vector::new(self.len);
 
         let mut need_to_add_prior = true;
 
         for edge in &self.edges {
             match edge {
-                Edge::SE2(edge) => {
+                Edge::SE2_SE2(edge) => {
                     let from_idx = *self.lut.get(&edge.from).unwrap();
                     let to_idx = *self.lut.get(&edge.to).unwrap();
 
@@ -276,16 +340,25 @@ impl PoseGraph {
                     let z = &edge.measurement;
                     let omega = &edge.information;
 
-                    let e = pose_pose_constraint(x1, x2, z);
-                    let (A, B) = linearize_pose_pose_constraint(x1, x2, z);
+                    let e = v3(&pose2D_pose2D_constraint(x1, x2, z));
+                    let (A, B) = linearize_pose2D_pose2D_constraint(x1, x2, z);
 
-                    update_linear_system(&mut H, &mut b, &e, &A, &B, omega, from_idx, to_idx)?;
+                    update_linear_system(
+                        &mut H_hash_map,
+                        &mut b,
+                        &e,
+                        &A,
+                        &B,
+                        omega,
+                        from_idx,
+                        to_idx,
+                    )?;
 
                     if need_to_add_prior {
-                        H.put(from_idx, from_idx, 1000.0)?;
-                        H.put(from_idx + 1, from_idx + 1, 1000.0)?;
-                        H.put(from_idx + 2, from_idx + 2, 1000.0)?;
-
+                        const V: f64 = 10000000.0;
+                        update(&mut H_hash_map, from_idx, from_idx, V)?;
+                        update(&mut H_hash_map, from_idx + 1, from_idx + 1, V)?;
+                        update(&mut H_hash_map, from_idx + 2, from_idx + 2, V)?;
                         need_to_add_prior = false;
                     }
                 }
@@ -299,21 +372,41 @@ impl PoseGraph {
                     let z = &edge.measurement;
                     let omega = &edge.information;
 
-                    let e = pose_landmark_constraint(x, landmark, z);
+                    let e = pose2D_landmark2D_constraint(x, landmark, z);
                     let (A, B) = linearize_pose_landmark_constraint(x, landmark);
 
-                    update_linear_system(&mut H, &mut b, &e, &A, &B, omega, from_idx, to_idx)?;
+                    update_linear_system(
+                        &mut H_hash_map,
+                        &mut b,
+                        &e,
+                        &A,
+                        &B,
+                        omega,
+                        from_idx,
+                        to_idx,
+                    )?;
                 }
-                Edge::SE3(_) => todo!(),
+                Edge::SE3_SE3(_) => todo!(),
                 Edge::SE3_XYZ => todo!(),
             }
         }
         b.map(|x| -x);
+        if self.solver == PoseGraphSolver::LevenbergMarquardt {
+            for i in 0..self.len {
+                update(&mut H_hash_map, i, i, lambda)?;
+            }
+        }
+
+        let mut H = SparseTriplet::new(self.len, self.len, self.len * self.len, Symmetry::General)?;
+        for ((i, j), v) in H_hash_map.drain() {
+            H.put(i, j, v)?;
+        }
+
         Ok((H, b))
     }
 
     fn linearize_and_solve(&self) -> Result<DVector<f64>, Box<dyn Error>> {
-        let (H, b) = self.build_linear_system()?;
+        let (H, b) = self.build_linear_system(0.0)?;
         solve_sparse(&H, &b)
     }
 
@@ -376,20 +469,22 @@ impl PoseGraph {
     }
 }
 
-fn pose_pose_constraint(
-    x1: &Isometry2<f64>,
-    x2: &Isometry2<f64>,
-    z: &Isometry2<f64>,
-) -> Vector3<f64> {
-    let constraint = z.inverse() * x1.inverse() * x2;
+fn v3(iso2: &Isometry2<f64>) -> Vector3<f64> {
     Vector3::new(
-        constraint.translation.x,
-        constraint.translation.y,
-        constraint.rotation.angle(),
+        iso2.translation.x,
+        iso2.translation.y,
+        iso2.rotation.angle(),
     )
 }
+fn pose2D_pose2D_constraint<R: AbstractRotation<f64, D>, const D: usize>(
+    x1: &Isometry<f64, R, D>,
+    x2: &Isometry<f64, R, D>,
+    z: &Isometry<f64, R, D>,
+) -> Isometry<f64, R, D> {
+    z.inverse() * x1.inverse() * x2
+}
 
-fn pose_landmark_constraint(
+fn pose2D_landmark2D_constraint(
     x: &Isometry2<f64>,
     landmark: &Vector2<f64>,
     z: &Vector2<f64>,
@@ -397,19 +492,19 @@ fn pose_landmark_constraint(
     x.rotation.to_rotation_matrix().transpose() * (landmark - x.translation.vector) - z
 }
 
-fn linearize_pose_pose_constraint(
+fn linearize_pose2D_pose2D_constraint(
     x1: &Isometry2<f64>,
     x2: &Isometry2<f64>,
     z: &Isometry2<f64>,
 ) -> (Matrix3<f64>, Matrix3<f64>) {
     let deriv = Matrix2::<f64>::new(0.0, -1.0, 1.0, 0.0);
 
-    let zr = z.rotation.to_rotation_matrix();
-    let x1r = x1.rotation.to_rotation_matrix();
-    let a_11 = -(zr.clone().inverse() * x1r.clone().inverse()).matrix();
+    let z_rot = z.rotation.to_rotation_matrix();
+    let x1_rot = x1.rotation.to_rotation_matrix();
+    let a_11 = -(z_rot.inverse() * x1_rot.inverse()).matrix();
     let xr1d = deriv * x1.rotation.to_rotation_matrix().matrix();
     let a_12 =
-        zr.clone().transpose() * xr1d.transpose() * (x2.translation.vector - x1.translation.vector);
+        z_rot.transpose() * xr1d.transpose() * (x2.translation.vector - x1.translation.vector);
 
     #[rustfmt::skip]
     let A = Matrix3::new(
@@ -418,13 +513,41 @@ fn linearize_pose_pose_constraint(
         0.0, 0.0, -1.0,
     );
 
-    let b_11 = (zr.inverse() * x1r.inverse()).matrix().to_owned();
+    let b_11 = (z_rot.inverse() * x1_rot.inverse()).matrix().to_owned();
     #[rustfmt::skip]
     let B = Matrix3::new(
         b_11.m11, b_11.m12, 0.0,
         b_11.m21, b_11.m22, 0.0,
         0.0, 0.0, 1.0,
     );
+    (A, B)
+}
+
+fn linearize_pose3D_pose3D_constraint(
+    x1: &Isometry3<f64>,
+    x2: &Isometry3<f64>,
+    z: &Isometry3<f64>,
+) -> (Matrix6<f64>, Matrix6<f64>) {
+    let a = z.inverse();
+    let b = x1.inverse() * x2;
+    let error = a * b;
+    let a_rot = a.rotation.to_rotation_matrix();
+    let b_rot = b.rotation.to_rotation_matrix();
+    let error_rot = error.rotation.to_rotation_matrix();
+    let dq_dR = jacobian_so3(error_rot.matrix()); // variable name taken over from g2o
+
+    let mut A = Matrix6::zeros();
+    A.index_mut((..3, ..3)).copy_from(&(-1.0 * a_rot.matrix()));
+    A.index_mut((..3, 3..))
+        .copy_from(&(a_rot.matrix() * skew(&b.translation.vector)));
+    A.index_mut((3.., 3..))
+        .copy_from(&(dq_dR * skew_m_and_mult_parts(b_rot.matrix(), a_rot.matrix())));
+
+    let mut B = Matrix6::zeros();
+    B.index_mut((..3, ..3)).copy_from(error_rot.matrix());
+
+    B.index_mut((3.., 3..))
+        .copy_from(&(dq_dR * skew_m_and_mult_parts(&Matrix3::identity(), error_rot.matrix())));
     (A, B)
 }
 
@@ -454,14 +577,14 @@ fn global_error(graph: &PoseGraph) -> f64 {
         .edges
         .iter()
         .map(|edge| match edge {
-            Edge::SE2(edge) => {
+            Edge::SE2_SE2(edge) => {
                 let Some(Node::SE2(x1)) = graph.nodes.get(&edge.from) else {unreachable!()};
                 let Some(Node::SE2(x2)) = graph.nodes.get(&edge.to) else {unreachable!()};
 
                 let z = &edge.measurement;
                 let omega = &edge.information;
 
-                let e = pose_pose_constraint(x1, x2, z);
+                let e = v3(&pose2D_pose2D_constraint(x1, x2, z));
 
                 (e.transpose() * omega * e).x
             }
@@ -471,10 +594,10 @@ fn global_error(graph: &PoseGraph) -> f64 {
 
                 let z = &edge.measurement;
                 let omega = &edge.information;
-                let e = pose_landmark_constraint(x, l, z);
+                let e = pose2D_landmark2D_constraint(x, l, z);
                 (e.transpose() * omega * e).x
             }
-            Edge::SE3(_) => todo!(),
+            Edge::SE3_SE3(_) => todo!(),
             Edge::SE3_XYZ => todo!(),
         })
         .sum()
@@ -483,24 +606,23 @@ fn global_error(graph: &PoseGraph) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mapping::g2o::parse_g2o;
 
     #[test]
     fn initial_global_error() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-pose.g2o";
-        let graph = parse_g2o(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
         approx::assert_abs_diff_eq!(138862234.0, global_error(&graph), epsilon = 10.0);
 
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let graph = parse_g2o(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
         approx::assert_abs_diff_eq!(3030.0, global_error(&graph), epsilon = 1.0);
 
         let filename = "dataset/g2o/intel.g2o";
-        let graph = parse_g2o(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
         approx::assert_abs_diff_eq!(1795139.0, global_error(&graph), epsilon = 1e-2);
 
         let filename = "dataset/g2o/dlr.g2o";
-        let graph = parse_g2o(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
         approx::assert_abs_diff_eq!(369655336.0, global_error(&graph), epsilon = 10.0);
         Ok(())
     }
@@ -508,28 +630,28 @@ mod tests {
     #[test]
     fn final_global_error() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-pose.g2o";
-        let error = *parse_g2o(filename)?
+        let error = *PoseGraph::from_g2o(filename)?
             .optimize(100, false, false)?
             .last()
             .unwrap();
         approx::assert_abs_diff_eq!(8269.0, error, epsilon = 1.0);
 
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let error = *parse_g2o(filename)?
+        let error = *PoseGraph::from_g2o(filename)?
             .optimize(100, false, false)?
             .last()
             .unwrap();
         approx::assert_abs_diff_eq!(474.0, error, epsilon = 1.0);
 
         let filename = "dataset/g2o/intel.g2o";
-        let error = *parse_g2o(filename)?
+        let error = *PoseGraph::from_g2o(filename)?
             .optimize(100, false, false)?
             .last()
             .unwrap();
         approx::assert_abs_diff_eq!(360.0, error, epsilon = 1.0);
 
         let filename = "dataset/g2o/dlr.g2o";
-        let error = *parse_g2o(filename)?
+        let error = *PoseGraph::from_g2o(filename)?
             .optimize(100, false, false)?
             .last()
             .unwrap();
@@ -541,17 +663,17 @@ mod tests {
     #[test]
     fn linearize_pose_pose_constraint_correct() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let graph = parse_g2o(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
 
         match &graph.edges[0] {
-            Edge::SE2(e) => {
+            Edge::SE2_SE2(e) => {
                 let Some(Node::SE2(x1)) = graph.nodes.get(&e.from) else {todo!()};
                 let Some(Node::SE2(x2)) = graph.nodes.get(&e.to) else {todo!()};
 
                 let z = e.measurement;
 
-                let e = pose_pose_constraint(&x1, &x2, &z);
-                let (A, B) = linearize_pose_pose_constraint(&x1, &x2, &z);
+                let e = v3(&pose2D_pose2D_constraint(&x1, &x2, &z));
+                let (A, B) = linearize_pose2D_pose2D_constraint(&x1, &x2, &z);
 
                 let A_expected = Matrix3::new(0.0, 1.0, 0.113, -1., 0., 0.024, 0., 0., -1.);
 
@@ -565,14 +687,14 @@ mod tests {
         }
 
         match &graph.edges[10] {
-            Edge::SE2(e) => {
+            Edge::SE2_SE2(e) => {
                 let Some(Node::SE2(x1)) = graph.nodes.get(&e.from) else {todo!()};
                 let Some(Node::SE2(x2)) = graph.nodes.get(&e.to) else {todo!()};
 
                 let z = e.measurement;
 
-                let e = pose_pose_constraint(&x1, &x2, &z);
-                let (A, B) = linearize_pose_pose_constraint(&x1, &x2, &z);
+                let e = v3(&pose2D_pose2D_constraint(&x1, &x2, &z));
+                let (A, B) = linearize_pose2D_pose2D_constraint(&x1, &x2, &z);
 
                 let A_expected =
                     Matrix3::new(0.037, 0.999, 0.138, -0.999, 0.037, -0.982, 0., 0., -1.);
@@ -592,7 +714,7 @@ mod tests {
     #[test]
     fn linearize_pose_landmark_constraint_correct() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let graph = parse_g2o(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
 
         match &graph.edges[1] {
             Edge::SE2_XY(edge) => {
@@ -601,7 +723,7 @@ mod tests {
 
                 let z = edge.measurement;
 
-                let e = pose_landmark_constraint(&x, &landmark, &z);
+                let e = pose2D_landmark2D_constraint(&x, &landmark, &z);
                 let (A, B) = linearize_pose_landmark_constraint(&x, &landmark);
 
                 let A_expected = Matrix2x3::new(0.0, 1.0, 0.358, -1., 0., -0.051);
@@ -620,7 +742,7 @@ mod tests {
     #[test]
     fn linearize_and_solve_correct() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let graph = parse_g2o(filename)?;
+        let graph = PoseGraph::from_g2o(filename)?;
         let dx = graph.linearize_and_solve()?;
         let expected_first_5 = DVector::<f64>::from_vec(vec![
             1.68518905e-01,
