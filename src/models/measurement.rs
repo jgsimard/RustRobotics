@@ -56,12 +56,12 @@ impl MeasurementModel<f64, Const<3>, Const<2>> for RangeBearingMeasurementModel 
         let q = (l_x - x_x).powi(2) + (l_y - x_y).powi(2);
         let q_sqrt = q.sqrt();
 
-        #[allow(clippy::deprecated_cfg_attr)]
-        #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix2x3::<f64>::new(
+        #[rustfmt::skip]
+        let jac = Matrix2x3::<f64>::new(
             -(l_x - x_x) / q_sqrt, -(l_y - x_y) / q_sqrt,   0.,
             (l_y - x_y) / q, (l_x - x_x) / q,              -1.,
-        )
+        );
+        jac
     }
 }
 
@@ -79,11 +79,11 @@ impl MeasurementModel<f64, Const<4>, Const<2>> for SimpleProblemMeasurementModel
     }
 
     fn jacobian(&self, _x: &Vector4<f64>, _landmark: Option<&Vector4<f64>>) -> Matrix2x4<f64> {
-        #[allow(clippy::deprecated_cfg_attr)]
-        #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix2x4::<f64>::new(
+        #[rustfmt::skip]
+        let jac = Matrix2x4::<f64>::new(
             1., 0., 0., 0.,
             0., 1., 0., 0.
-        )
+        );
+        jac
     }
 }

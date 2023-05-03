@@ -72,21 +72,21 @@ impl MotionModel<f64, Const<3>, Const<2>, Const<2>> for Velocity {
         let v = u[0];
         let w = u[1];
         if w != 0.0 {
-            #[allow(clippy::deprecated_cfg_attr)]
-            #[cfg_attr(rustfmt, rustfmt_skip)]
-            Matrix3::<f64>::new(
+            #[rustfmt::skip]
+            let jac = Matrix3::<f64>::new(
                 1., 0., v / w * (-theta.cos() + (theta + w * dt).cos()),
                 0., 1., v / w * (-theta.sin() + (theta + w * dt).sin()),
                 0., 0., 1.
-            )
+            );
+            jac
         } else {
-            #[allow(clippy::deprecated_cfg_attr)]
-            #[cfg_attr(rustfmt, rustfmt_skip)]
-            Matrix3::<f64>::new(
+            #[rustfmt::skip]
+            let jac = Matrix3::<f64>::new(
                 1., 0., -v * theta.sin() * dt,
                 0., 1., -v * theta.cos() * dt,
                 0., 0., 1.
-            )
+            );
+            jac
         }
     }
 
@@ -103,21 +103,21 @@ impl MotionModel<f64, Const<3>, Const<2>, Const<2>> for Velocity {
             let sintdt = (theta + w * dt).sin();
             let costdt = (theta + w * dt).cos();
             let w2 = w * w;
-            #[allow(clippy::deprecated_cfg_attr)]
-            #[cfg_attr(rustfmt, rustfmt_skip)]
-            Matrix3x2::<f64>::new(
+            #[rustfmt::skip]
+            let jac = Matrix3x2::<f64>::new(
                 (-sint + sintdt) / w, v  * ((sint - sintdt) / w2 + costdt * dt / w),
                 (cost - costdt) / w, v  * (-(cost - costdt) / w2 + sintdt * dt / w),
                 0., dt
-            )
+            );
+            jac
         } else {
-            #[allow(clippy::deprecated_cfg_attr)]
-            #[cfg_attr(rustfmt, rustfmt_skip)]
-            Matrix3x2::<f64>::new(
+            #[rustfmt::skip]
+            let jac = Matrix3x2::<f64>::new(
                 theta.cos() * dt, 0.,
                 theta.sin() * dt, 0.,
                 0., dt
-            )
+            );
+            jac
         }
     }
 
@@ -125,12 +125,12 @@ impl MotionModel<f64, Const<3>, Const<2>, Const<2>> for Velocity {
         let v2 = u[0].powi(2);
         let w2 = u[1].powi(2);
         let eps = 0.00001;
-        #[allow(clippy::deprecated_cfg_attr)]
-        #[cfg_attr(rustfmt, rustfmt_skip)]
-        Matrix2::<f64>::new(
+        #[rustfmt::skip]
+        let cov = Matrix2::<f64>::new(
             self.a[0] * v2 + self.a[1] * w2 + eps, 0.0,
             0.0, self.a[2] * v2 + self.a[3] * w2 + eps,
-        )
+        );
+        cov
     }
 
     fn sample(&self, x: &Vector3<f64>, u: &Vector2<f64>, dt: f64) -> Vector3<f64> {
@@ -214,17 +214,17 @@ impl MotionModel<f64, Const<4>, Const<2>, Const<2>> for SimpleProblemMotionModel
         )
     }
 
-    #[allow(clippy::deprecated_cfg_attr)]
     fn jacobian_wrt_state(&self, x: &Vector4<f64>, u: &Vector2<f64>, dt: f64) -> Matrix4<f64> {
         let yaw = x[2];
         let v = u[0];
-        #[cfg_attr(rustfmt, rustfmt_skip)]
-            Matrix4::<f64>::new(
-                1., 0., -dt * v * (yaw).sin(), dt * (yaw).cos(),
-                0., 1., dt * v * (yaw).cos(), dt * (yaw).sin(),
-                0., 0., 1., 0.,
-                0., 0., 0., 0.,
-            )
+        #[rustfmt::skip]
+        let jac = Matrix4::<f64>::new(
+            1., 0., -dt * v * (yaw).sin(), dt * (yaw).cos(),
+            0., 1., dt * v * (yaw).cos(), dt * (yaw).sin(),
+            0., 0., 1., 0.,
+            0., 0., 0., 0.,
+        );
+        jac
     }
     fn jacobian_wrt_input(&self, _x: &Vector4<f64>, _u: &Vector2<f64>, _dt: f64) -> Matrix4x2<f64> {
         unimplemented!()

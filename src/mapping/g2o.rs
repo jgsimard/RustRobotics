@@ -5,7 +5,6 @@ use nalgebra::{
     UnitComplex, UnitQuaternion, Vector2,
 };
 use rustc_hash::FxHashMap;
-use serde::{Deserialize, Serialize};
 use std::error::Error;
 
 use crate::mapping::pose_graph_optimization::{Edge, EdgeSE2, EdgeSE2_XY, EdgeSE3, Node};
@@ -18,14 +17,6 @@ fn iso3(x: f64, y: f64, z: f64, qx: f64, qy: f64, qz: f64, qw: f64) -> Isometry3
     let translation = Translation3::new(x, y, z);
     let rotation = UnitQuaternion::from_quaternion(Quaternion::new(qx, qy, qz, qw));
     Isometry3::from_parts(translation, rotation)
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct VERTEX_SE2 {
-    id: u32,
-    x: f64,
-    y: f64,
-    z: f64,
 }
 
 fn vecf64(line: Vec<&str>, skip: usize) -> Vec<f64> {
