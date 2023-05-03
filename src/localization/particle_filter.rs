@@ -100,20 +100,7 @@ where
     }
 
     fn gaussian_estimate(&self) -> GaussianState<T, S> {
-        let shape = self.particules[0].shape_generic();
-        let x = self
-            .particules
-            .iter()
-            .fold(OMatrix::zeros_generic(shape.0, shape.1), |a, b| a + b)
-            / T::from_usize(self.particules.len()).unwrap();
-        let cov = self
-            .particules
-            .iter()
-            .map(|p| p - &x)
-            .map(|dx| &dx * dx.transpose())
-            .fold(OMatrix::zeros_generic(shape.0, shape.0), |a, b| a + b)
-            / T::from_usize(self.particules.len()).unwrap();
-        GaussianState { x, cov }
+        gaussian_estimate(&self.particules)
     }
 }
 
@@ -215,21 +202,28 @@ where
     }
 
     fn gaussian_estimate(&self) -> GaussianState<T, S> {
-        let shape = self.particules[0].shape_generic();
-        let x = self
-            .particules
-            .iter()
-            .fold(OMatrix::zeros_generic(shape.0, shape.1), |a, b| a + b)
-            / T::from_usize(self.particules.len()).unwrap();
-        let cov = self
-            .particules
-            .iter()
-            .map(|p| p - &x)
-            .map(|dx| &dx * dx.transpose())
-            .fold(OMatrix::zeros_generic(shape.0, shape.0), |a, b| a + b)
-            / T::from_usize(self.particules.len()).unwrap();
-        GaussianState { x, cov }
+        gaussian_estimate(&self.particules)
     }
+}
+
+fn gaussian_estimate<T: RealField + Copy, S: Dim>(
+    particules: &[OVector<T, S>],
+) -> GaussianState<T, S>
+where
+    DefaultAllocator: Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Const<1>, S>,
+{
+    let shape = particules[0].shape_generic();
+    let x = particules
+        .iter()
+        .fold(OMatrix::zeros_generic(shape.0, shape.1), |a, b| a + b)
+        / T::from_usize(particules.len()).unwrap();
+    let cov = particules
+        .iter()
+        .map(|p| p - &x)
+        .map(|dx| &dx * dx.transpose())
+        .fold(OMatrix::zeros_generic(shape.0, shape.0), |a, b| a + b)
+        / T::from_usize(particules.len()).unwrap();
+    GaussianState { x, cov }
 }
 
 fn resampling<T: RealField + Copy, S: Dim>(
