@@ -1,3 +1,4 @@
+pub mod control;
 pub mod data;
 pub mod localization;
 pub mod mapping;

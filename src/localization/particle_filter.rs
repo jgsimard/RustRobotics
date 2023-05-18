@@ -1,3 +1,4 @@
+#![allow(dead_code)] // TODO: remove this
 use nalgebra::{allocator::Allocator, Const, DefaultAllocator, Dim, OMatrix, OVector, RealField};
 use rand::distributions::Distribution;
 use rand::Rng;
@@ -95,8 +96,9 @@ where
             weights[i] *= pdf;
         }
 
-        self.particules = resampling(&self.particules, &weights);
+        // self.particules = resampling(&self.particules, &weights);
         // self.particules = resampling_sort(&self.particules, weights);
+        self.particules = resampling_stratified(&self.particules, &weights);
     }
 
     fn gaussian_estimate(&self) -> GaussianState<T, S> {
@@ -258,35 +260,71 @@ where
         .collect()
 }
 
-// fn resampling_sort<T: RealField + Copy, S: Dim>(
-//     particules: &Vec<OVector<T, S>>,
-//     weights: &[T],
-// ) -> Vec<OVector<T, S>>
-// where
-//     DefaultAllocator: Allocator<T, S>,
-//     Standard: Distribution<T>,
-// {
-//     let total_weight: T = weights.iter().fold(T::zero(), |a, b| a + *b);
-//     let mut rng = rand::thread_rng();
-//     let mut draws: Vec<T> = (0..particules.len())
-//         .map(|_| rng.gen::<T>() * total_weight)
-//         .collect();
-//     draws.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-//     let mut index = 0;
-//     let mut cum_weight = draws[0];
-//     (0..particules.len())
-//         .map(|i| {
-//             while cum_weight < draws[i] {
-//                 if index == particules.len() - 1 {
-//                     // weird precision edge case
-//                     cum_weight = total_weight;
-//                     break;
-//                 } else {
-//                     cum_weight += weights[index];
-//                     index += 1;
-//                 }
-//             }
-//             particules[index].clone()
-//         })
-//         .collect()
-// }
+fn resampling_sort<T: RealField + Copy, S: Dim>(
+    particules: &Vec<OVector<T, S>>,
+    weights: &[T],
+) -> Vec<OVector<T, S>>
+where
+    DefaultAllocator: Allocator<T, S>,
+    Standard: Distribution<T>,
+{
+    let total_weight: T = weights.iter().fold(T::zero(), |a, b| a + *b);
+    let mut rng = rand::thread_rng();
+    let mut draws: Vec<T> = (0..particules.len())
+        .map(|_| rng.gen::<T>() * total_weight)
+        .collect();
+    draws.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+    let mut index = 0;
+    let mut cum_weight = draws[0];
+    (0..particules.len())
+        .map(|i| {
+            while cum_weight < draws[i] {
+                if index == particules.len() - 1 {
+                    // weird precision edge case
+                    cum_weight = total_weight;
+                    break;
+                } else {
+                    cum_weight += weights[index];
+                    index += 1;
+                }
+            }
+            particules[index].clone()
+        })
+        .collect()
+}
+
+fn resampling_stratified<T: RealField + Copy, S: Dim>(
+    particules: &Vec<OVector<T, S>>,
+    weights: &[T],
+) -> Vec<OVector<T, S>>
+where
+    DefaultAllocator: Allocator<T, S>,
+    Standard: Distribution<T>,
+{
+    let total_weight: T = weights.iter().fold(T::zero(), |a, b| a + *b);
+    let mut rng = rand::thread_rng();
+    let mut draws: Vec<T> = (0..particules.len())
+        .map(|i| {
+            (T::from_usize(i).unwrap() + rng.gen::<T>()) / T::from_usize(particules.len()).unwrap()
+                * total_weight
+        })
+        .collect();
+    draws.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
+    let mut index = 0;
+    let mut cum_weight = draws[0];
+    (0..particules.len())
+        .map(|i| {
+            while cum_weight < draws[i] {
+                if index == particules.len() - 1 {
+                    // weird precision edge case
+                    cum_weight = total_weight;
+                    break;
+                } else {
+                    cum_weight += weights[index];
+                    index += 1;
+                }
+            }
+            particules[index].clone()
+        })
+        .collect()
+}

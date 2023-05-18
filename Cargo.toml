@@ -58,6 +58,10 @@ path = "examples/localization/localization_landmarks.rs"
 name = "pose_graph_optimization"
 path = "examples/mapping/pose_graph_optimization.rs"
 
+[[example]]
+name = "inverted_pendulum"
+path = "examples/control/inverted_pendulum.rs"
+
 
 [[bench]]
 name = "kalman_filter"
