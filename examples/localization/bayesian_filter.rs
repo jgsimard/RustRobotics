@@ -6,7 +6,7 @@ use std::error::Error;
 
 extern crate robotics;
 use robotics::localization::{
-    BayesianFilter, ExtendedKalmanFilter, ParticleFilter, UnscentedKalmanFilter,
+    BayesianFilter, ExtendedKalmanFilter, ParticleFilter, ResamplingScheme, UnscentedKalmanFilter,
 };
 use robotics::models::measurement::{MeasurementModel, SimpleProblemMeasurementModel};
 use robotics::models::motion::{MotionModel, SimpleProblemMotionModel};
@@ -96,6 +96,7 @@ fn run(algo: &str) -> History {
             SimpleProblemMotionModel::new(),
             initial_state,
             300,
+            ResamplingScheme::Stratified,
         )),
         _ => unimplemented!("{}", algo),
     };

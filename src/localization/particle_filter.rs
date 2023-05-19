@@ -11,6 +11,12 @@ use crate::models::motion::MotionModel;
 use crate::utils::mvn::MultiVariateNormal;
 use crate::utils::state::GaussianState;
 
+pub enum ResamplingScheme {
+    IID,
+    Stratified,
+    Systematic,
+}
+
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct ParticleFilter<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
@@ -21,6 +27,7 @@ where
     measurement_model: Box<dyn MeasurementModel<T, S, Z> + Send>,
     motion_model: Box<dyn MotionModel<T, S, Z, U> + Send>,
     pub particules: Vec<OVector<T, S>>,
+    resampling_scheme: ResamplingScheme,
 }
 
 impl<T: RealField + Copy, S: Dim, Z: Dim, U: Dim> ParticleFilter<T, S, Z, U>
@@ -40,6 +47,7 @@ where
         motion_model: Box<dyn MotionModel<T, S, Z, U> + Send>,
         initial_state: GaussianState<T, S>,
         num_particules: usize,
+        resampling_scheme: ResamplingScheme,
     ) -> ParticleFilter<T, S, Z, U> {
         let mvn = MultiVariateNormal::new(&initial_state.x, &r).unwrap();
         let mut particules = Vec::with_capacity(num_particules);
@@ -53,6 +61,7 @@ where
             measurement_model,
             motion_model,
             particules,
+            resampling_scheme,
         }
     }
 }
@@ -96,9 +105,11 @@ where
             weights[i] *= pdf;
         }
 
-        // self.particules = resampling(&self.particules, &weights);
-        // self.particules = resampling_sort(&self.particules, weights);
-        self.particules = resampling_stratified(&self.particules, &weights);
+        self.particules = match self.resampling_scheme {
+            ResamplingScheme::IID => resampling_sort(&self.particules, &weights),
+            ResamplingScheme::Stratified => resampling_stratified(&self.particules, &weights),
+            ResamplingScheme::Systematic => resampling_systematic(&self.particules, &weights),
+        };
     }
 
     fn gaussian_estimate(&self) -> GaussianState<T, S> {
@@ -273,24 +284,7 @@ where
     let mut draws: Vec<T> = (0..particules.len())
         .map(|_| rng.gen::<T>() * total_weight)
         .collect();
-    draws.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
-    let mut index = 0;
-    let mut cum_weight = draws[0];
-    (0..particules.len())
-        .map(|i| {
-            while cum_weight < draws[i] {
-                if index == particules.len() - 1 {
-                    // weird precision edge case
-                    cum_weight = total_weight;
-                    break;
-                } else {
-                    cum_weight += weights[index];
-                    index += 1;
-                }
-            }
-            particules[index].clone()
-        })
-        .collect()
+    resample(&mut draws, total_weight, particules, weights)
 }
 
 fn resampling_stratified<T: RealField + Copy, S: Dim>(
@@ -309,6 +303,39 @@ where
                 * total_weight
         })
         .collect();
+    resample(&mut draws, total_weight, particules, weights)
+}
+
+fn resampling_systematic<T: RealField + Copy, S: Dim>(
+    particules: &Vec<OVector<T, S>>,
+    weights: &[T],
+) -> Vec<OVector<T, S>>
+where
+    DefaultAllocator: Allocator<T, S>,
+    Standard: Distribution<T>,
+{
+    let total_weight: T = weights.iter().fold(T::zero(), |a, b| a + *b);
+    let mut rng = rand::thread_rng();
+    let draw = rng.gen::<T>();
+    let mut draws: Vec<T> = (0..particules.len())
+        .map(|i| {
+            (T::from_usize(i).unwrap() + draw) / T::from_usize(particules.len()).unwrap()
+                * total_weight
+        })
+        .collect();
+    resample(&mut draws, total_weight, particules, weights)
+}
+
+fn resample<T: RealField + Copy, S: Dim>(
+    draws: &mut [T],
+    total_weight: T,
+    particules: &Vec<OVector<T, S>>,
+    weights: &[T],
+) -> Vec<OVector<T, S>>
+where
+    DefaultAllocator: Allocator<T, S>,
+    Standard: Distribution<T>,
+{
     draws.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
     let mut index = 0;
     let mut cum_weight = draws[0];
