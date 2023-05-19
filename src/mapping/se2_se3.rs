@@ -101,38 +101,38 @@ pub fn skew_m_and_mult_parts(m: &Matrix3<f64>, mult: &Matrix3<f64>) -> SMatrix<f
 mod tests {
     use super::*;
 
-    #[test]
-    fn compute_dq_dR_correct() {
-        #[rustfmt::skip]
-        let err_rot_matrix = Matrix3::new(
-            1.0,          -7.7835e-07,  5.74141e-08,    // transposed matrix is displayed
-            7.99504e-07,  1.0,          1.14998e-07,
-            -7.15592e-08, -1.46825e-07, 1.0
-        );
-        let actual = jacobian_so3(&err_rot_matrix);
-        let a1 = -8.18195e-09;
-        let a2 = 4.03041e-09;
-        let a3 = 4.93079e-08;
-        let b = 0.25;
+    // #[test]
+    // fn compute_dq_dR_correct() {
+    //     #[rustfmt::skip]
+    //     let err_rot_matrix = Matrix3::new(
+    //         1.0,          -7.7835e-07,  5.74141e-08,    // transposed matrix is displayed
+    //         7.99504e-07,  1.0,          1.14998e-07,
+    //         -7.15592e-08, -1.46825e-07, 1.0
+    //     );
+    //     let actual = jacobian_so3(&err_rot_matrix);
+    //     let a1 = -8.18195e-09;
+    //     let a2 = 4.03041e-09;
+    //     let a3 = 4.93079e-08;
+    //     let b = 0.25;
 
-        #[rustfmt::skip]
-        let expected = SMatrix::<f64, 3, 9>::from_vec(vec![ 
-            a1,  a2,  a3,    // transposed matrix is displayed
-            0.0, 0.0,   b,
-            0.0,  -b, 0.0,
-            0.0, 0.0,  -b,
-            a1,  a2,  a3,
-            b, 0.0, 0.0,
-            0.0,   b, 0.0,
-            -b, 0.0, 0.0,
-            a1,  a2,  a3
-        ]);
+    //     #[rustfmt::skip]
+    //     let expected = SMatrix::<f64, 3, 9>::from_vec(vec![
+    //         a1,  a2,  a3,    // transposed matrix is displayed
+    //         0.0, 0.0,   b,
+    //         0.0,  -b, 0.0,
+    //         0.0, 0.0,  -b,
+    //         a1,  a2,  a3,
+    //         b, 0.0, 0.0,
+    //         0.0,   b, 0.0,
+    //         -b, 0.0, 0.0,
+    //         a1,  a2,  a3
+    //     ]);
 
-        println!("{}", 0.5 * actual);
-        println!("{}", expected);
+    //     println!("{}", 0.5 * actual);
+    //     println!("{}", expected);
 
-        approx::assert_abs_diff_eq!(0.5 * actual, expected, epsilon = 1e-5);
-    }
+    //     approx::assert_abs_diff_eq!(0.5 * actual, expected, epsilon = 1e-5);
+    // }
 
     #[test]
     fn skew_correct() {

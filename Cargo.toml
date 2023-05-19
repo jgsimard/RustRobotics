@@ -67,6 +67,6 @@ path = "examples/control/inverted_pendulum.rs"
 name = "kalman_filter"
 harness = false
 
-# [[bench]]
-# name = "graph_slam"
-# harness = false
+[[bench]]
+name = "graph_slam"
+harness = false

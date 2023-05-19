@@ -23,7 +23,7 @@ pub enum Edge<T> {
     SE3_XYZ,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum PoseGraphSolver {
     GaussNewton,
     LevenbergMarquardt,
@@ -464,7 +464,7 @@ impl PoseGraph {
         // save figure
         plot.set_equal_axes(true)
             // .set_figure_size_points(600.0, 600.0)
-            .save(format!("img/{}-{}.svg", self.name, self.iteration).as_str())?;
+            .save(format!("img/{}-{}-{:?}.svg", self.name, self.iteration, self.solver).as_str())?;
         Ok(())
     }
 }

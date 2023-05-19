@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let solvers = &["GaussNewton", "LevenbergMarquardt"];
     let solver_idx = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Pick g2o file")
+        .with_prompt("Pick Solver")
         .default(0)
         .items(&solvers[..])
         .interact()
