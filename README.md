@@ -76,3 +76,17 @@ cargo run --example pose_graph_optimization
 - [A tutorial on Graph-Based SLAM](https://www.researchgate.net/profile/Mohamed-Mourad-Lafifi/post/What_is_the_relationship_between_GraphSLAM_and_Pose_Graph_SLAM/attachment/613b3f63647f3906fc978272/AS%3A1066449581928450%401631272802870/download/A+tutorial+on+graph-based+SLAM+_+Grisetti2010.pdf)
 - [A tutorial on SE(3) transformation parameterizations and on-manifold optimization](https://arxiv.org/abs/2103.15980)
 - [Courses from Dr. Cyrill Stachniss](https://www.ipb.uni-bonn.de/teaching)
+
+## Compilation issues
+
+For plotters
+
+```bash
+sudo apt install fontconfig libfontconfig libfontconfig1-dev
+```
+
+For Russel
+
+```bash
+sudo apt install liblapacke-dev libmumps-seq-dev libopenblas-dev libsuitesparse-dev
+```
