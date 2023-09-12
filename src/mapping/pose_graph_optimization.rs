@@ -191,9 +191,8 @@ fn solve_sparse(A: &SparseTriplet, b: &Vector) -> Result<DVector<f64>, Box<dyn E
     let n = b.dim();
     let mut solution = Vector::new(n);
     let config = ConfigSolver::new();
-    let mut solver = Solver::new(config)?;
-    solver.initialize(A)?;
-    solver.factorize()?;
+    let mut solver = Solver::new(config, A.neq(), A.nnz_current(), Some(Symmetry::General))?;
+    solver.factorize(A)?;
     solver.solve(&mut solution, b)?;
     Ok(DVector::from_vec(solution.as_data().clone()))
 }
@@ -334,8 +333,12 @@ impl PoseGraph {
                     let from_idx = *self.lut.get(&edge.from).unwrap();
                     let to_idx = *self.lut.get(&edge.to).unwrap();
 
-                    let Some(Node::SE2(x1)) = self.nodes.get(&edge.from) else {unreachable!()};
-                    let Some(Node::SE2(x2)) = self.nodes.get(&edge.to) else {unreachable!()};
+                    let Some(Node::SE2(x1)) = self.nodes.get(&edge.from) else {
+                        unreachable!()
+                    };
+                    let Some(Node::SE2(x2)) = self.nodes.get(&edge.to) else {
+                        unreachable!()
+                    };
 
                     let z = &edge.measurement;
                     let omega = &edge.information;
@@ -366,8 +369,12 @@ impl PoseGraph {
                     let from_idx = *self.lut.get(&edge.from).unwrap();
                     let to_idx = *self.lut.get(&edge.to).unwrap();
 
-                    let Some(Node::SE2(x)) = self.nodes.get(&edge.from) else {unreachable!()};
-                    let Some(Node::XY(landmark)) = self.nodes.get(&edge.to) else {unreachable!()};
+                    let Some(Node::SE2(x)) = self.nodes.get(&edge.from) else {
+                        unreachable!()
+                    };
+                    let Some(Node::XY(landmark)) = self.nodes.get(&edge.to) else {
+                        unreachable!()
+                    };
 
                     let z = &edge.measurement;
                     let omega = &edge.information;
@@ -397,7 +404,7 @@ impl PoseGraph {
             }
         }
 
-        let mut H = SparseTriplet::new(self.len, self.len, self.len * self.len, Symmetry::General)?;
+        let mut H = SparseTriplet::new(self.len, self.len * self.len)?;
         for ((i, j), v) in H_hash_map.drain() {
             H.put(i, j, v)?;
         }
@@ -578,8 +585,12 @@ fn global_error(graph: &PoseGraph) -> f64 {
         .iter()
         .map(|edge| match edge {
             Edge::SE2_SE2(edge) => {
-                let Some(Node::SE2(x1)) = graph.nodes.get(&edge.from) else {unreachable!()};
-                let Some(Node::SE2(x2)) = graph.nodes.get(&edge.to) else {unreachable!()};
+                let Some(Node::SE2(x1)) = graph.nodes.get(&edge.from) else {
+                    unreachable!()
+                };
+                let Some(Node::SE2(x2)) = graph.nodes.get(&edge.to) else {
+                    unreachable!()
+                };
 
                 let z = &edge.measurement;
                 let omega = &edge.information;
@@ -589,8 +600,12 @@ fn global_error(graph: &PoseGraph) -> f64 {
                 (e.transpose() * omega * e).x
             }
             Edge::SE2_XY(edge) => {
-                let Some(Node::SE2(x)) = graph.nodes.get(&edge.from) else {unreachable!()};
-                let Some(Node::XY(l)) = graph.nodes.get(&edge.to) else {unreachable!()};
+                let Some(Node::SE2(x)) = graph.nodes.get(&edge.from) else {
+                    unreachable!()
+                };
+                let Some(Node::XY(l)) = graph.nodes.get(&edge.to) else {
+                    unreachable!()
+                };
 
                 let z = &edge.measurement;
                 let omega = &edge.information;
@@ -667,8 +682,12 @@ mod tests {
 
         match &graph.edges[0] {
             Edge::SE2_SE2(e) => {
-                let Some(Node::SE2(x1)) = graph.nodes.get(&e.from) else {todo!()};
-                let Some(Node::SE2(x2)) = graph.nodes.get(&e.to) else {todo!()};
+                let Some(Node::SE2(x1)) = graph.nodes.get(&e.from) else {
+                    todo!()
+                };
+                let Some(Node::SE2(x2)) = graph.nodes.get(&e.to) else {
+                    todo!()
+                };
 
                 let z = e.measurement;
 
@@ -688,8 +707,12 @@ mod tests {
 
         match &graph.edges[10] {
             Edge::SE2_SE2(e) => {
-                let Some(Node::SE2(x1)) = graph.nodes.get(&e.from) else {todo!()};
-                let Some(Node::SE2(x2)) = graph.nodes.get(&e.to) else {todo!()};
+                let Some(Node::SE2(x1)) = graph.nodes.get(&e.from) else {
+                    todo!()
+                };
+                let Some(Node::SE2(x2)) = graph.nodes.get(&e.to) else {
+                    todo!()
+                };
 
                 let z = e.measurement;
 
@@ -718,8 +741,12 @@ mod tests {
 
         match &graph.edges[1] {
             Edge::SE2_XY(edge) => {
-                let Some(Node::SE2(x)) = graph.nodes.get(&edge.from) else {todo!()};
-                let Some(Node::XY(landmark)) = graph.nodes.get(&edge.to) else {todo!()};
+                let Some(Node::SE2(x)) = graph.nodes.get(&edge.from) else {
+                    todo!()
+                };
+                let Some(Node::XY(landmark)) = graph.nodes.get(&edge.to) else {
+                    todo!()
+                };
 
                 let z = edge.measurement;
 

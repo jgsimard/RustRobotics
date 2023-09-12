@@ -28,7 +28,7 @@ impl MeasurementModel<f64, Const<3>, Const<2>> for RangeBearingMeasurementModel 
         let x_y = x[1];
         let x_theta = x[2];
         // landmark
-        let Some(lm) = landmark else{
+        let Some(lm) = landmark else {
             panic!("WRONG!!!")
         };
         let l_x = lm[0];
@@ -47,7 +47,7 @@ impl MeasurementModel<f64, Const<3>, Const<2>> for RangeBearingMeasurementModel 
         let x_x = x[0];
         let x_y = x[1];
         // landmark
-        let Some(lm) = landmark else{
+        let Some(lm) = landmark else {
             panic!("WRONG x2 !!!")
         };
         let l_x = lm[0];

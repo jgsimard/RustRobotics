@@ -44,7 +44,9 @@ where
 {
     pub fn new(mean: &OVector<T, D>, covariance: &OMatrix<T, D, D>) -> Result<Self, Error> {
         let Some(covariance_cholesky) = covariance.clone().cholesky() else {
-            return Err(Error{error_type : ErrorType::CovarianceNotSemiDefinitePositive})
+            return Err(Error {
+                error_type: ErrorType::CovarianceNotSemiDefinitePositive,
+            });
         };
         let det = covariance_cholesky.determinant();
         let precision = covariance_cholesky.inverse();

@@ -53,21 +53,25 @@ pub fn parse_g2o(
         match line[0] {
             "VERTEX_SE2" => {
                 let id = line[1].parse()?;
-                let [x, y, angle] = vec(line, 2)[..] else {todo!()};
+                let [x, y, angle] = vec(line, 2)[..] else {
+                    todo!()
+                };
                 nodes.insert(id, Node::SE2(iso2(x, y, angle)));
                 lut.insert(id, offset);
                 offset += 3;
             }
             "VERTEX_XY" => {
                 let id = line[1].parse()?;
-                let [x, y] = vec(line, 2)[..] else {todo!()};
+                let [x, y] = vec(line, 2)[..] else { todo!() };
                 nodes.insert(id, Node::XY(Vector2::new(x, y)));
                 lut.insert(id, offset);
                 offset += 2;
             }
             "VERTEX_SE3:QUAT" => {
                 let id = line[1].parse()?;
-                let [x, y, z, qx, qy, qz, qw] = vec(line, 2)[..] else {todo!()};
+                let [x, y, z, qx, qy, qz, qw] = vec(line, 2)[..] else {
+                    todo!()
+                };
                 nodes.insert(id, Node::SE3(iso3(x, y, z, qx, qy, qz, qw)));
                 lut.insert(id, offset);
                 offset += 6;
@@ -75,12 +79,9 @@ pub fn parse_g2o(
             "EDGE_SE2" => {
                 let from = line[1].parse()?;
                 let to = line[2].parse()?;
-                let [
-                    x, y, angle,
-                    i_11, i_12, i_13,
-                          i_22, i_23,
-                                i_33
-                    ] = vec(line, 3)[..] else {todo!()};
+                let [x, y, angle, i_11, i_12, i_13, i_22, i_23, i_33] = vec(line, 3)[..] else {
+                    todo!()
+                };
 
                 let measurement = iso2(x, y, angle);
 
@@ -96,7 +97,9 @@ pub fn parse_g2o(
             "EDGE_SE2_XY" => {
                 let from = line[1].parse()?;
                 let to = line[2].parse()?;
-                let [x, y, i_11, i_12, i_22] = vec(line, 3)[..] else {todo!()};
+                let [x, y, i_11, i_12, i_22] = vec(line, 3)[..] else {
+                    todo!()
+                };
 
                 let measurement = Vector2::new(x, y);
 
@@ -111,16 +114,11 @@ pub fn parse_g2o(
             "EDGE_SE3:QUAT" => {
                 let from = line[1].parse()?;
                 let to = line[2].parse()?;
-                let [
-                    x, y, z,
-                    qx, qy, qz, qw,
-                    i_11, i_12, i_13, i_14, i_15, i_16,
-                          i_22, i_23, i_24, i_25, i_26,
-                                i_33, i_34, i_35, i_36,
-                                      i_44, i_45, i_46,
-                                            i_55, i_56,
-                                                  i_66
-                    ] = vec(line, 3)[..] else {todo!()};
+                let [x, y, z, qx, qy, qz, qw, i_11, i_12, i_13, i_14, i_15, i_16, i_22, i_23, i_24, i_25, i_26, i_33, i_34, i_35, i_36, i_44, i_45, i_46, i_55, i_56, i_66] =
+                    vec(line, 3)[..]
+                else {
+                    todo!()
+                };
 
                 let measurement = iso3(x, y, z, qx, qy, qz, qw);
 
