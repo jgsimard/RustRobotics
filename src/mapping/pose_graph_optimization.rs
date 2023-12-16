@@ -122,8 +122,7 @@ pub struct PoseGraph {
 
 #[allow(clippy::too_many_arguments)]
 fn update_linear_system<const X1: usize, const X2: usize>(
-    // H: &mut SparseTriplet,
-    H: &mut FxHashMap<(usize, usize), f64>,
+    H: &mut SparseMatrix,
     b: &mut Vector,
     e: &SVector<f64, X2>,
     A: &SMatrix<f64, X2, X1>,
@@ -152,29 +151,15 @@ fn update_linear_system<const X1: usize, const X2: usize>(
     Ok(())
 }
 
-fn update(
-    hash_map: &mut FxHashMap<(usize, usize), f64>,
-    i: usize,
-    j: usize,
-    v: f64,
-) -> Result<(), Box<dyn Error>> {
-    if let Some(x) = hash_map.get_mut(&(i, j)) {
-        *x += v;
-    } else {
-        hash_map.insert((i, j), v);
-    }
-    Ok(())
-}
-
 fn set_matrix<const R: usize, const C: usize>(
-    hash_map: &mut FxHashMap<(usize, usize), f64>,
+    A: &mut SparseMatrix,
     i: usize,
     j: usize,
     m: &SMatrix<f64, R, C>,
 ) -> Result<(), Box<dyn Error>> {
     for ii in 0..R {
         for jj in 0..C {
-            update(hash_map, i + ii, j + jj, m.fixed_view::<1, 1>(ii, jj).x)?;
+            A.put(i + ii, j + jj, m.fixed_view::<1, 1>(ii, jj).x)?;
         }
     }
     Ok(())
@@ -333,7 +318,13 @@ impl PoseGraph {
     }
 
     fn build_linear_system(&self, lambda: f64) -> Result<(SparseMatrix, Vector), Box<dyn Error>> {
-        let mut H_hash_map = FxHashMap::default();
+        let mut H = SparseMatrix::new_coo(
+            self.len,
+            self.len,
+            self.len * self.len,
+            Some(Symmetry::PositiveDefinite(Storage::Full)),
+            false,
+        )?;
         let mut b = Vector::new(self.len);
 
         let mut need_to_add_prior = true;
@@ -357,22 +348,13 @@ impl PoseGraph {
                     let e = v3(&pose2D_pose2D_constraint(x1, x2, z));
                     let (A, B) = linearize_pose2D_pose2D_constraint(x1, x2, z);
 
-                    update_linear_system(
-                        &mut H_hash_map,
-                        &mut b,
-                        &e,
-                        &A,
-                        &B,
-                        omega,
-                        from_idx,
-                        to_idx,
-                    )?;
+                    update_linear_system(&mut H, &mut b, &e, &A, &B, omega, from_idx, to_idx)?;
 
                     if need_to_add_prior {
                         const V: f64 = 10000000.0;
-                        update(&mut H_hash_map, from_idx, from_idx, V)?;
-                        update(&mut H_hash_map, from_idx + 1, from_idx + 1, V)?;
-                        update(&mut H_hash_map, from_idx + 2, from_idx + 2, V)?;
+                        H.put(from_idx, from_idx, V)?;
+                        H.put(from_idx + 1, from_idx + 1, V)?;
+                        H.put(from_idx + 2, from_idx + 2, V)?;
                         need_to_add_prior = false;
                     }
                 }
@@ -393,16 +375,7 @@ impl PoseGraph {
                     let e = pose2D_landmark2D_constraint(x, landmark, z);
                     let (A, B) = linearize_pose_landmark_constraint(x, landmark);
 
-                    update_linear_system(
-                        &mut H_hash_map,
-                        &mut b,
-                        &e,
-                        &A,
-                        &B,
-                        omega,
-                        from_idx,
-                        to_idx,
-                    )?;
+                    update_linear_system(&mut H, &mut b, &e, &A, &B, omega, from_idx, to_idx)?;
                 }
                 Edge::SE3_SE3(_) => todo!(),
                 Edge::SE3_XYZ => todo!(),
@@ -411,20 +384,8 @@ impl PoseGraph {
         b.map(|x| -x);
         if self.solver == PoseGraphSolver::LevenbergMarquardt {
             for i in 0..self.len {
-                update(&mut H_hash_map, i, i, lambda)?;
+                H.put(i, i, lambda)?;
             }
-        }
-        let mut H = SparseMatrix::new_coo(
-            self.len,
-            self.len,
-            H_hash_map.len(),
-            Some(Symmetry::PositiveDefinite(Storage::Full)),
-            false,
-        )?;
-
-        // let mut H = SparseTriplet::new(self.len, self.len * self.len)?;
-        for ((i, j), v) in H_hash_map.drain() {
-            H.put(i, j, v)?;
         }
 
         Ok((H, b))
