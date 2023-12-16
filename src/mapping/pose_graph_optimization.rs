@@ -194,27 +194,6 @@ fn solve_sparse(A: &mut SparseMatrix, b: &Vector) -> Result<DVector<f64>, Box<dy
 }
 
 impl PoseGraph {
-    pub fn from_g2o(filename: &str) -> Result<PoseGraph, Box<dyn Error>> {
-        let (len, edges, lut, nodes) = parse_g2o(filename)?;
-        let name = filename
-            .split('/')
-            .last()
-            .unwrap()
-            .split('.')
-            .next()
-            .unwrap()
-            .to_string();
-        Ok(PoseGraph {
-            len,
-            nodes,
-            edges,
-            lut,
-            iteration: 0,
-            name,
-            solver: PoseGraphSolver::GaussNewton,
-        })
-    }
-
     pub fn new(filename: &str, solver: PoseGraphSolver) -> Result<PoseGraph, Box<dyn Error>> {
         let (len, edges, lut, nodes) = parse_g2o(filename)?;
         let name = filename
@@ -248,9 +227,7 @@ impl PoseGraph {
                 Node::XY(node) => {
                     *node += dx.fixed_rows::<2>(offset);
                 }
-                Node::SE3(_) => {
-                    todo!()
-                }
+                Node::SE3(_) => todo!(),
                 Node::XYZ(_) => todo!(),
             }
         });
@@ -397,7 +374,7 @@ impl PoseGraph {
     }
 
     pub fn plot(&self) -> Result<(), Box<dyn Error>> {
-        // poses + landarks
+        // poses + landmarks
         let mut landmarks_present = false;
         let mut poses_seq = Vec::new();
         let mut poses = Curve::new();
@@ -604,19 +581,19 @@ mod tests {
     #[test]
     fn initial_global_error() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-pose.g2o";
-        let graph = PoseGraph::from_g2o(filename)?;
+        let graph = PoseGraph::new(filename, PoseGraphSolver::GaussNewton)?;
         approx::assert_abs_diff_eq!(138862234.0, global_error(&graph), epsilon = 10.0);
 
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let graph = PoseGraph::from_g2o(filename)?;
+        let graph = PoseGraph::new(filename, PoseGraphSolver::GaussNewton)?;
         approx::assert_abs_diff_eq!(3030.0, global_error(&graph), epsilon = 1.0);
 
         let filename = "dataset/g2o/intel.g2o";
-        let graph = PoseGraph::from_g2o(filename)?;
+        let graph = PoseGraph::new(filename, PoseGraphSolver::GaussNewton)?;
         approx::assert_abs_diff_eq!(1795139.0, global_error(&graph), epsilon = 1e-2);
 
         let filename = "dataset/g2o/dlr.g2o";
-        let graph = PoseGraph::from_g2o(filename)?;
+        let graph = PoseGraph::new(filename, PoseGraphSolver::GaussNewton)?;
         approx::assert_abs_diff_eq!(369655336.0, global_error(&graph), epsilon = 10.0);
         Ok(())
     }
@@ -624,28 +601,28 @@ mod tests {
     #[test]
     fn final_global_error() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-pose.g2o";
-        let error = *PoseGraph::from_g2o(filename)?
+        let error = *PoseGraph::new(filename, PoseGraphSolver::GaussNewton)?
             .optimize(100, false, false)?
             .last()
             .unwrap();
         approx::assert_abs_diff_eq!(8269.0, error, epsilon = 1.0);
 
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let error = *PoseGraph::from_g2o(filename)?
+        let error = *PoseGraph::new(filename, PoseGraphSolver::GaussNewton)?
             .optimize(100, false, false)?
             .last()
             .unwrap();
         approx::assert_abs_diff_eq!(474.0, error, epsilon = 1.0);
 
         let filename = "dataset/g2o/intel.g2o";
-        let error = *PoseGraph::from_g2o(filename)?
+        let error = *PoseGraph::new(filename, PoseGraphSolver::GaussNewton)?
             .optimize(100, false, false)?
             .last()
             .unwrap();
         approx::assert_abs_diff_eq!(360.0, error, epsilon = 1.0);
 
         let filename = "dataset/g2o/dlr.g2o";
-        let error = *PoseGraph::from_g2o(filename)?
+        let error = *PoseGraph::new(filename, PoseGraphSolver::GaussNewton)?
             .optimize(100, false, false)?
             .last()
             .unwrap();
@@ -657,7 +634,7 @@ mod tests {
     #[test]
     fn linearize_pose_pose_constraint_correct() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let graph = PoseGraph::from_g2o(filename)?;
+        let graph = PoseGraph::new(filename, PoseGraphSolver::GaussNewton)?;
 
         match &graph.edges[0] {
             Edge::SE2_SE2(e) => {
@@ -716,7 +693,7 @@ mod tests {
     #[test]
     fn linearize_pose_landmark_constraint_correct() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let graph = PoseGraph::from_g2o(filename)?;
+        let graph = PoseGraph::new(filename, PoseGraphSolver::GaussNewton)?;
 
         match &graph.edges[1] {
             Edge::SE2_XY(edge) => {
@@ -748,7 +725,7 @@ mod tests {
     #[test]
     fn linearize_and_solve_correct() -> Result<(), Box<dyn Error>> {
         let filename = "dataset/g2o/simulation-pose-landmark.g2o";
-        let graph = PoseGraph::from_g2o(filename)?;
+        let graph = PoseGraph::new(filename, PoseGraphSolver::GaussNewton)?;
         let dx = graph.linearize_and_solve()?;
         let expected_first_5 = DVector::<f64>::from_vec(vec![
             1.68518905e-01,
