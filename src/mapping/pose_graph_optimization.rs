@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 #![allow(dead_code)] // TODO: remove this
+
 use nalgebra::{
     AbstractRotation, DVector, Isometry, Isometry2, Isometry3, Matrix2, Matrix2x3, Matrix3,
     Matrix6, SMatrix, SVector, UnitComplex, Vector2, Vector3,
@@ -8,7 +9,7 @@ use nalgebra::{
 use plotpy::{Curve, Plot};
 use rayon::prelude::*;
 use russell_lab::Vector;
-use russell_sparse::{ConfigSolver, Solver, SparseTriplet, Symmetry};
+use russell_sparse::prelude::*;
 use rustc_hash::FxHashMap;
 use std::error::Error;
 
@@ -185,15 +186,30 @@ fn set_vector<const D: usize>(v: &mut Vector, i: usize, source: &SVector<f64, D>
     }
 }
 
-fn solve_sparse(A: &SparseTriplet, b: &Vector) -> Result<DVector<f64>, Box<dyn Error>> {
-    // Use Russell Sparse because it is much faster then nalgebra_sparse,
-    // it uses SuitsSparse
+fn solve_sparse(A: &mut SparseMatrix, b: &Vector) -> Result<DVector<f64>, Box<dyn Error>> {
+    // Russell Sparse (SuiteSparse wrapper) is much faster then nalgebra_sparse
     let n = b.dim();
     let mut solution = Vector::new(n);
-    let config = ConfigSolver::new();
-    let mut solver = Solver::new(config, A.neq(), A.nnz_current(), Some(Symmetry::General))?;
-    solver.factorize(A)?;
-    solver.solve(&mut solution, b)?;
+    // let config = ConfigSolver::new();
+    // let mut solver = Solver::new(config, A.neq(), A.nnz_current(), Some(Symmetry::General))?;
+    // solver.factorize(A)?;
+    // solver.solve(&mut solution, b)?;
+
+    // allocate solver
+    let mut umfpack = SolverUMFPACK::new()?;
+
+    // parameters
+    let mut params = LinSolParams::new();
+    params.verbose = false;
+    params.compute_determinant = true;
+
+    // call factorize
+    umfpack.factorize(A, Some(params))?;
+
+    // calculate the solution
+    umfpack.solve(&mut solution, A, b, false)?;
+    // println!("x =\n{}", solution);
+
     Ok(DVector::from_vec(solution.as_data().clone()))
 }
 
@@ -285,8 +301,8 @@ impl PoseGraph {
         for i in 0..num_iterations {
             self.iteration += 1;
             // let dx = self.linearize_and_solve()?;
-            let (H, b) = self.build_linear_system(lambda)?;
-            let dx = solve_sparse(&H, &b)?;
+            let (mut H, b) = self.build_linear_system(lambda)?;
+            let dx = solve_sparse(&mut H, &b)?;
             self.update_nodes(&dx);
             // self.x += &dx;
             let norm_dx = dx.norm();
@@ -321,7 +337,7 @@ impl PoseGraph {
         Ok(errors)
     }
 
-    fn build_linear_system(&self, lambda: f64) -> Result<(SparseTriplet, Vector), Box<dyn Error>> {
+    fn build_linear_system(&self, lambda: f64) -> Result<(SparseMatrix, Vector), Box<dyn Error>> {
         let mut H_hash_map = FxHashMap::default();
         let mut b = Vector::new(self.len);
 
@@ -403,8 +419,15 @@ impl PoseGraph {
                 update(&mut H_hash_map, i, i, lambda)?;
             }
         }
+        let mut H = SparseMatrix::new_coo(
+            self.len,
+            self.len,
+            H_hash_map.len(),
+            Some(Symmetry::PositiveDefinite(Storage::Full)),
+            false,
+        )?;
 
-        let mut H = SparseTriplet::new(self.len, self.len * self.len)?;
+        // let mut H = SparseTriplet::new(self.len, self.len * self.len)?;
         for ((i, j), v) in H_hash_map.drain() {
             H.put(i, j, v)?;
         }
@@ -413,8 +436,8 @@ impl PoseGraph {
     }
 
     fn linearize_and_solve(&self) -> Result<DVector<f64>, Box<dyn Error>> {
-        let (H, b) = self.build_linear_system(0.0)?;
-        solve_sparse(&H, &b)
+        let (mut H, b) = self.build_linear_system(0.0)?;
+        solve_sparse(&mut H, &b)
     }
 
     pub fn plot(&self) -> Result<(), Box<dyn Error>> {
