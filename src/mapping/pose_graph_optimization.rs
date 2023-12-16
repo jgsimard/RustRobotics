@@ -190,10 +190,6 @@ fn solve_sparse(A: &mut SparseMatrix, b: &Vector) -> Result<DVector<f64>, Box<dy
     // Russell Sparse (SuiteSparse wrapper) is much faster then nalgebra_sparse
     let n = b.dim();
     let mut solution = Vector::new(n);
-    // let config = ConfigSolver::new();
-    // let mut solver = Solver::new(config, A.neq(), A.nnz_current(), Some(Symmetry::General))?;
-    // solver.factorize(A)?;
-    // solver.solve(&mut solution, b)?;
 
     // allocate solver
     let mut umfpack = SolverUMFPACK::new()?;
@@ -208,7 +204,6 @@ fn solve_sparse(A: &mut SparseMatrix, b: &Vector) -> Result<DVector<f64>, Box<dy
 
     // calculate the solution
     umfpack.solve(&mut solution, A, b, false)?;
-    // println!("x =\n{}", solution);
 
     Ok(DVector::from_vec(solution.as_data().clone()))
 }
