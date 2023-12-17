@@ -103,6 +103,47 @@ impl<T> EdgeSE3<T> {
     }
 }
 
+pub struct SparseLinearSystem {
+    pub H: SparseMatrix,
+    pub b: Vector,
+}
+
+impl SparseLinearSystem {
+    pub fn new(len: usize) -> SparseLinearSystem {
+        let H = SparseMatrix::new_coo(
+            len,
+            len,
+            len * len,
+            Some(Symmetry::PositiveDefinite(Storage::Full)),
+            false,
+        )
+        .unwrap();
+        let b = Vector::new(len);
+        SparseLinearSystem { H, b }
+    }
+    pub fn solve(&mut self) -> Result<DVector<f64>, Box<dyn Error>> {
+        // Russell Sparse (SuiteSparse wrapper) is much faster then nalgebra_sparse
+        let n = self.b.dim();
+        let mut solution = Vector::new(n);
+
+        // allocate solver
+        let mut umfpack = SolverUMFPACK::new()?;
+
+        // parameters
+        let mut params = LinSolParams::new();
+        params.verbose = false;
+        params.compute_determinant = true;
+
+        // call factorize
+        umfpack.factorize(&mut self.H, Some(params))?;
+
+        // calculate the solution
+        umfpack.solve(&mut solution, &self.H, &self.b, false)?;
+
+        Ok(DVector::from_vec(solution.as_data().clone()))
+    }
+}
+
 #[allow(clippy::upper_case_acronyms)]
 #[derive(PartialEq)]
 pub enum Node {
@@ -121,10 +162,8 @@ pub struct PoseGraph<'a> {
     solver: PoseGraphSolver,
 }
 
-#[allow(clippy::too_many_arguments)]
 fn update_linear_system<const X1: usize, const X2: usize>(
-    H: &mut SparseMatrix,
-    b: &mut Vector,
+    sls: &mut SparseLinearSystem,
     e: &SVector<f64, X2>,
     A: &SMatrix<f64, X2, X1>,
     B: &SMatrix<f64, X2, X2>,
@@ -142,13 +181,13 @@ fn update_linear_system<const X1: usize, const X2: usize>(
     let b_j = B.transpose() * omega * e;
 
     // Update the linear system
-    set_matrix(H, from, from, &H_ii)?;
-    set_matrix(H, from, to, &H_ij)?;
-    set_matrix(H, to, from, &H_ji)?;
-    set_matrix(H, to, to, &H_jj)?;
+    set_matrix(&mut sls.H, from, from, &H_ii)?;
+    set_matrix(&mut sls.H, from, to, &H_ij)?;
+    set_matrix(&mut sls.H, to, from, &H_ji)?;
+    set_matrix(&mut sls.H, to, to, &H_jj)?;
 
-    set_vector(b, from, &b_i);
-    set_vector(b, to, &b_j);
+    set_vector(&mut sls.b, from, &b_i);
+    set_vector(&mut sls.b, to, &b_j);
     Ok(())
 }
 
@@ -170,28 +209,6 @@ fn set_vector<const D: usize>(v: &mut Vector, i: usize, source: &SVector<f64, D>
     for ii in 0..D {
         v.set(i + ii, source.fixed_view::<1, 1>(ii, 0).x + v.get(i + ii))
     }
-}
-
-fn solve_sparse(A: &mut SparseMatrix, b: &Vector) -> Result<DVector<f64>, Box<dyn Error>> {
-    // Russell Sparse (SuiteSparse wrapper) is much faster then nalgebra_sparse
-    let n = b.dim();
-    let mut solution = Vector::new(n);
-
-    // allocate solver
-    let mut umfpack = SolverUMFPACK::new()?;
-
-    // parameters
-    let mut params = LinSolParams::new();
-    params.verbose = false;
-    params.compute_determinant = true;
-
-    // call factorize
-    umfpack.factorize(A, Some(params))?;
-
-    // calculate the solution
-    umfpack.solve(&mut solution, A, b, false)?;
-
-    Ok(DVector::from_vec(solution.as_data().clone()))
 }
 
 impl<'a> PoseGraph<'a> {
@@ -251,8 +268,7 @@ impl<'a> PoseGraph<'a> {
         }
         for i in 0..num_iterations {
             self.iteration += 1;
-            let (mut H, b) = self.build_linear_system(lambda)?;
-            let dx = solve_sparse(&mut H, &b)?;
+            let dx = self.build_linear_system(lambda)?.solve()?;
             self.update_nodes(&dx);
             let norm_dx = dx.norm();
             let error = global_error(self);
@@ -286,16 +302,8 @@ impl<'a> PoseGraph<'a> {
         Ok(errors)
     }
 
-    fn build_linear_system(&self, lambda: f64) -> Result<(SparseMatrix, Vector), Box<dyn Error>> {
-        let mut H = SparseMatrix::new_coo(
-            self.len,
-            self.len,
-            self.len * self.len,
-            Some(Symmetry::PositiveDefinite(Storage::Full)),
-            false,
-        )?;
-        let mut b = Vector::new(self.len);
-
+    fn build_linear_system(&self, lambda: f64) -> Result<SparseLinearSystem, Box<dyn Error>> {
+        let mut sls = SparseLinearSystem::new(self.len);
         let mut need_to_add_prior = true;
 
         for edge in &self.edges {
@@ -317,13 +325,13 @@ impl<'a> PoseGraph<'a> {
                     let e = v3(&pose2D_pose2D_constraint(x1, x2, z));
                     let (A, B) = linearize_pose2D_pose2D_constraint(x1, x2, z);
 
-                    update_linear_system(&mut H, &mut b, &e, &A, &B, omega, from_idx, to_idx)?;
+                    update_linear_system(&mut sls, &e, &A, &B, omega, from_idx, to_idx)?;
 
                     if need_to_add_prior {
                         const V: f64 = 10000000.0;
-                        H.put(from_idx, from_idx, V)?;
-                        H.put(from_idx + 1, from_idx + 1, V)?;
-                        H.put(from_idx + 2, from_idx + 2, V)?;
+                        sls.H.put(from_idx, from_idx, V)?;
+                        sls.H.put(from_idx + 1, from_idx + 1, V)?;
+                        sls.H.put(from_idx + 2, from_idx + 2, V)?;
                         need_to_add_prior = false;
                     }
                 }
@@ -344,25 +352,24 @@ impl<'a> PoseGraph<'a> {
                     let e = pose2D_landmark2D_constraint(x, landmark, z);
                     let (A, B) = linearize_pose_landmark_constraint(x, landmark);
 
-                    update_linear_system(&mut H, &mut b, &e, &A, &B, omega, from_idx, to_idx)?;
+                    update_linear_system(&mut sls, &e, &A, &B, omega, from_idx, to_idx)?;
                 }
                 Edge::SE3_SE3(_) => todo!(),
                 Edge::SE3_XYZ => todo!(),
             }
         }
-        b.map(|x| -x);
+        sls.b.map(|x| -x);
         if self.solver == PoseGraphSolver::LevenbergMarquardt {
             for i in 0..self.len {
-                H.put(i, i, lambda)?;
+                sls.H.put(i, i, lambda)?;
             }
         }
 
-        Ok((H, b))
+        Ok(sls)
     }
 
     fn linearize_and_solve(&self) -> Result<DVector<f64>, Box<dyn Error>> {
-        let (mut H, b) = self.build_linear_system(0.0)?;
-        solve_sparse(&mut H, &b)
+        self.build_linear_system(0.0)?.solve()
     }
 
     pub fn plot(&self) -> Result<(), Box<dyn Error>> {
