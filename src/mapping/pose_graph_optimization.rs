@@ -12,6 +12,7 @@ use russell_lab::Vector;
 use russell_sparse::prelude::*;
 use rustc_hash::FxHashMap;
 use std::error::Error;
+use std::path::Path;
 
 use crate::mapping::g2o::parse_g2o;
 use crate::mapping::se2_se3::{jacobian_so3, skew, skew_m_and_mult_parts};
@@ -110,13 +111,13 @@ pub enum Node {
     XY(Vector2<f64>),
     XYZ(Vector3<f64>),
 }
-pub struct PoseGraph {
+pub struct PoseGraph<'a> {
     len: usize,
     nodes: FxHashMap<u32, Node>,
     edges: Vec<Edge<f64>>,
     lut: FxHashMap<u32, usize>,
     iteration: usize,
-    name: String,
+    name: &'a str,
     solver: PoseGraphSolver,
 }
 
@@ -193,17 +194,10 @@ fn solve_sparse(A: &mut SparseMatrix, b: &Vector) -> Result<DVector<f64>, Box<dy
     Ok(DVector::from_vec(solution.as_data().clone()))
 }
 
-impl PoseGraph {
-    pub fn new(filename: &str, solver: PoseGraphSolver) -> Result<PoseGraph, Box<dyn Error>> {
-        let (len, edges, lut, nodes) = parse_g2o(filename)?;
-        let name = filename
-            .split('/')
-            .last()
-            .unwrap()
-            .split('.')
-            .next()
-            .unwrap()
-            .to_string();
+impl<'a> PoseGraph<'a> {
+    pub fn new(file_path: &str, solver: PoseGraphSolver) -> Result<PoseGraph, Box<dyn Error>> {
+        let (len, edges, lut, nodes) = parse_g2o(file_path)?;
+        let name = Path::new(file_path).file_stem().unwrap().to_str().unwrap();
         Ok(PoseGraph {
             len,
             nodes,
@@ -257,11 +251,9 @@ impl PoseGraph {
         }
         for i in 0..num_iterations {
             self.iteration += 1;
-            // let dx = self.linearize_and_solve()?;
             let (mut H, b) = self.build_linear_system(lambda)?;
             let dx = solve_sparse(&mut H, &b)?;
             self.update_nodes(&dx);
-            // self.x += &dx;
             let norm_dx = dx.norm();
             let error = global_error(self);
             if self.solver == PoseGraphSolver::LevenbergMarquardt {
