@@ -30,7 +30,7 @@ rayon = "1.7"
 [dev-dependencies]
 criterion = "0.5"
 approx = "0.5"
-dialoguer = "0.10"
+dialoguer = "0.11"
 
 [lib]
 name = "robotics"
