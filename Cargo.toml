@@ -23,6 +23,7 @@ russell_lab = "0.7"
 russell_sparse = "0.7"
 plotpy = "0.5"
 rayon = "1.7"
+faer = "0.18" # fast linear algebra
 # # python
 # pyo3 = { version = "0.18", features = ["extension-module"] }
 # numpy = {version = "0.18", features = ["nalgebra"] }
@@ -31,6 +32,9 @@ rayon = "1.7"
 criterion = "0.5"
 approx = "0.5"
 dialoguer = "0.11"
+
+[profile.dev.package.faer]
+opt-level = 3
 
 [lib]
 name = "robotics"
