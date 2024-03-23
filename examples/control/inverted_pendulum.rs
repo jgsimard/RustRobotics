@@ -2,10 +2,9 @@ use dialoguer::{theme::ColorfulTheme, Select};
 use nalgebra::{Const, Matrix1, Matrix4, Matrix4x1, Vector4};
 use plotpy::{Curve, Plot};
 use std::error::Error;
-use std::time::Instant;
 
 extern crate robotics;
-use robotics::control::lqr::{lqr, LinearModel};
+use robotics::control::lqr::{lqr, LinearTimeInvariantModel};
 
 /// [x, x_dot, theta, thetha_dot]
 struct InvertedPendulumModel {
@@ -14,7 +13,6 @@ struct InvertedPendulumModel {
     r: Matrix1<f64>,
     q: Matrix4<f64>,
 }
-
 impl InvertedPendulumModel {
     fn new(l_bar: f64, mass_cart: f64, mass_ball: f64, g: f64) -> InvertedPendulumModel {
         let q = Matrix4::from_diagonal(&Vector4::new(10.00, 1.0, 10.0, 1.0));
@@ -32,20 +30,14 @@ impl InvertedPendulumModel {
 
         InvertedPendulumModel { da, db, r, q }
     }
-}
 
-impl<'a> LinearModel<'a, f64, Const<4>, Const<1>> for InvertedPendulumModel {
-    fn a(&self, dt: f64) -> Matrix4<f64> {
-        Matrix4::identity() + dt * self.da
-    }
-    fn b(&self, dt: f64) -> Matrix4x1<f64> {
-        dt * self.db
-    }
-    fn q(&'a self) -> &'a Matrix4<f64> {
-        &self.q
-    }
-    fn r(&'a self) -> &'a Matrix1<f64> {
-        &self.r
+    fn linearize(&self, dt: f64) -> LinearTimeInvariantModel<f64, Const<4>, Const<1>> {
+        LinearTimeInvariantModel {
+            A: Matrix4::identity() + dt * self.da,
+            B: dt * self.db,
+            Q: self.q.clone(),
+            R: self.r.clone(),
+        }
     }
 }
 
@@ -61,23 +53,20 @@ fn run() -> Option<(Vec<Vector4<f64>>, Vec<f64>)> {
     let mass_ball = 0.3; // [kg]
     let g = 9.8; // [m/s^2]
 
-    let linear_model = InvertedPendulumModel::new(l_bar, mass_cart, mass_ball, g);
+    let model = InvertedPendulumModel::new(l_bar, mass_cart, mass_ball, g);
+    let linear_model = model.linearize(dt);
+    let k_lqr = lqr(&linear_model, max_iter, epsilon)?;
 
     let mut x = Vector4::new(0.0, 0.0, -0.2, 0.0);
-    let x_goal = Vector4::new(-0.0, 0.0, 0.0, 0.0);
+    let x_goal = Vector4::new(0.0, 0.0, 0.0, 0.0);
 
     let mut states = vec![x];
     let mut commands = vec![0.0];
 
     while time < sim_time {
         time += dt;
-
-        let start = Instant::now();
-        let u = lqr(&(&x - &x_goal), dt, &linear_model, max_iter, epsilon)?;
-        let duration = start.elapsed();
-        println!("Time elapsed in lqr() is: {:?}", duration);
-
-        x = linear_model.step(&x, &u, dt);
+        let u = -k_lqr * (&x - &x_goal);
+        x = &linear_model.A * x + &linear_model.B * u;
 
         states.push(x.clone());
         commands.push(u.x);
