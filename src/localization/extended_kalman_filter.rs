@@ -9,7 +9,7 @@ use crate::utils::state::GaussianState;
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct ExtendedKalmanFilter<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
-    DefaultAllocator: Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Z, Z>,
+    DefaultAllocator: Allocator<S> + Allocator<S, S> + Allocator<Z, Z>,
 {
     r: OMatrix<T, S, S>,
     q: OMatrix<T, Z, Z>,
@@ -20,7 +20,7 @@ where
 
 impl<T: RealField, S: Dim, Z: Dim, U: Dim> ExtendedKalmanFilter<T, S, Z, U>
 where
-    DefaultAllocator: Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Z, Z>,
+    DefaultAllocator: Allocator<S> + Allocator<S, S> + Allocator<Z, Z>,
 {
     pub fn new(
         r: OMatrix<T, S, S>,
@@ -42,15 +42,15 @@ where
 impl<T: RealField, S: Dim, Z: Dim, U: Dim> BayesianFilter<T, S, Z, U>
     for ExtendedKalmanFilter<T, S, Z, U>
 where
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, Z>
-        + Allocator<T, S, S>
-        + Allocator<T, Z, Z>
-        + Allocator<T, Z, S>
-        + Allocator<T, S, U>
-        + Allocator<T, U, U>
-        + Allocator<T, S, Z>,
+    DefaultAllocator: Allocator<S>
+        + Allocator<U>
+        + Allocator<Z>
+        + Allocator<S, S>
+        + Allocator<Z, Z>
+        + Allocator<Z, S>
+        + Allocator<S, U>
+        + Allocator<U, U>
+        + Allocator<S, Z>,
 {
     fn update_estimate(&mut self, u: &OVector<T, U>, z: &OVector<T, Z>, dt: T) {
         // predict
@@ -80,7 +80,7 @@ where
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct ExtendedKalmanFilterKnownCorrespondences<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
-    DefaultAllocator: Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Z, Z>,
+    DefaultAllocator: Allocator<S> + Allocator<S, S> + Allocator<Z, Z>,
 {
     q: OMatrix<T, Z, Z>,
     landmarks: FxHashMap<u32, OVector<T, S>>,
@@ -91,7 +91,7 @@ where
 
 impl<T: RealField, S: Dim, Z: Dim, U: Dim> ExtendedKalmanFilterKnownCorrespondences<T, S, Z, U>
 where
-    DefaultAllocator: Allocator<T, S> + Allocator<T, U> + Allocator<T, S, S> + Allocator<T, Z, Z>,
+    DefaultAllocator: Allocator<S> + Allocator<U> + Allocator<S, S> + Allocator<Z, Z>,
 {
     pub fn new(
         q: OMatrix<T, Z, Z>,
@@ -113,16 +113,16 @@ where
 impl<T: RealField + Copy, S: Dim, Z: Dim, U: Dim> BayesianFilterKnownCorrespondences<T, S, Z, U>
     for ExtendedKalmanFilterKnownCorrespondences<T, S, Z, U>
 where
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, Z>
-        + Allocator<T, S, S>
-        + Allocator<T, Z, Z>
-        + Allocator<T, Z, S>
-        + Allocator<T, S, U>
-        + Allocator<T, U, U>
-        + Allocator<T, S, Z>
-        + Allocator<T, U, S>,
+    DefaultAllocator: Allocator<S>
+        + Allocator<U>
+        + Allocator<Z>
+        + Allocator<S, S>
+        + Allocator<Z, Z>
+        + Allocator<Z, S>
+        + Allocator<S, U>
+        + Allocator<U, U>
+        + Allocator<S, Z>
+        + Allocator<U, S>,
 {
     fn update_estimate(
         &mut self,

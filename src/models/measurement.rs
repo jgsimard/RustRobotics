@@ -5,7 +5,7 @@ use nalgebra::{
 
 pub trait MeasurementModel<T: RealField, S: Dim, Z: Dim>
 where
-    DefaultAllocator: Allocator<T, S> + Allocator<T, Z> + Allocator<T, S, S> + Allocator<T, Z, S>,
+    DefaultAllocator: Allocator<S> + Allocator<Z> + Allocator<S, S> + Allocator<Z, S>,
 {
     fn prediction(&self, x: &OVector<T, S>, landmark: Option<&OVector<T, S>>) -> OVector<T, Z>;
     fn jacobian(&self, x: &OVector<T, S>, landmark: Option<&OVector<T, S>>) -> OMatrix<T, Z, S>;

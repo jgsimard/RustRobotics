@@ -3,7 +3,7 @@ use nalgebra::{allocator::Allocator, DefaultAllocator, Dim, OMatrix, OVector, Re
 #[derive(Debug, Clone)]
 pub struct GaussianState<T: RealField, D: Dim>
 where
-    DefaultAllocator: Allocator<T, D> + Allocator<T, D, D>,
+    DefaultAllocator: Allocator<D> + Allocator<D, D>,
 {
     /// State Vector
     pub x: OVector<T, D>,

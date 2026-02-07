@@ -9,12 +9,12 @@ use rand_distr::{Distribution, Normal};
 // #[enum_dispatch(MM<T, S, Z, U>)]
 pub trait MotionModel<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, S, S>
-        + Allocator<T, U, U>
-        + Allocator<T, S, U>
-        + Allocator<T, Z, S>,
+    DefaultAllocator: Allocator<S>
+        + Allocator<U>
+        + Allocator<S, S>
+        + Allocator<U, U>
+        + Allocator<S, U>
+        + Allocator<Z, S>,
 {
     fn prediction(&self, x: &OVector<T, S>, u: &OVector<T, U>, dt: T) -> OVector<T, S>;
     fn jacobian_wrt_state(&self, x: &OVector<T, S>, u: &OVector<T, U>, dt: T) -> OMatrix<T, S, S>;
@@ -143,7 +143,7 @@ impl MotionModel<f64, Const<3>, Const<2>, Const<2>> for Velocity {
         let v2 = v.powi(2);
         let w2 = w.powi(2);
         let eps = 0.00001;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let v_noisy = Normal::new(v, (self.a[0] * v2 + self.a[1] * w2 + eps).sqrt())
             .unwrap()
             .sample(&mut rng);

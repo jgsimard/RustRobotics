@@ -4,7 +4,7 @@ use crate::utils::state::GaussianState;
 
 pub trait BayesianFilter<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
-    DefaultAllocator: Allocator<T, S> + Allocator<T, U> + Allocator<T, Z> + Allocator<T, S, S>,
+    DefaultAllocator: Allocator<S> + Allocator<U> + Allocator<Z> + Allocator<S, S>,
 {
     fn update_estimate(&mut self, u: &OVector<T, U>, z: &OVector<T, Z>, dt: T);
 
@@ -13,7 +13,7 @@ where
 
 pub trait BayesianFilterKnownCorrespondences<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
-    DefaultAllocator: Allocator<T, S> + Allocator<T, U> + Allocator<T, Z> + Allocator<T, S, S>,
+    DefaultAllocator: Allocator<S> + Allocator<U> + Allocator<Z> + Allocator<S, S>,
 {
     fn update_estimate(
         &mut self,

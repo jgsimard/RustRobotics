@@ -34,7 +34,7 @@ impl SimpleProblem {
         u: &Vector2<f64>,
         dt: f64,
     ) -> (Vector4<f64>, Vector2<f64>, Vector4<f64>, Vector2<f64>) {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let normal = Normal::new(0., 1.).unwrap();
 
         let x_true_next = self.motion_model.prediction(x_true, u, dt);

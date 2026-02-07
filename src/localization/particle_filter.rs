@@ -1,8 +1,8 @@
 #![allow(dead_code)] // TODO: remove this
 use nalgebra::{allocator::Allocator, Const, DefaultAllocator, Dim, OMatrix, OVector, RealField};
-use rand::distributions::Distribution;
+use rand::distr::{Distribution, StandardUniform};
 use rand::Rng;
-use rand_distr::{Standard, StandardNormal};
+use rand_distr::StandardNormal;
 use rustc_hash::FxHashMap;
 
 use crate::localization::bayesian_filter::{BayesianFilter, BayesianFilterKnownCorrespondences};
@@ -20,7 +20,7 @@ pub enum ResamplingScheme {
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct ParticleFilter<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
-    DefaultAllocator: Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Z, Z>,
+    DefaultAllocator: Allocator<S> + Allocator<S, S> + Allocator<Z, Z>,
 {
     r: OMatrix<T, S, S>,
     q: OMatrix<T, Z, Z>,
@@ -33,12 +33,12 @@ where
 impl<T: RealField + Copy, S: Dim, Z: Dim, U: Dim> ParticleFilter<T, S, Z, U>
 where
     StandardNormal: Distribution<T>,
-    Standard: Distribution<T>,
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, S, S>
-        + Allocator<T, Z, Z>
-        + Allocator<T, Const<1>, S>
-        + Allocator<T, Const<1>, Z>,
+    StandardUniform: Distribution<T>,
+    DefaultAllocator: Allocator<S>
+        + Allocator<S, S>
+        + Allocator<Z, Z>
+        + Allocator<Const<1>, S>
+        + Allocator<Const<1>, Z>,
 {
     pub fn new(
         r: OMatrix<T, S, S>,
@@ -69,17 +69,17 @@ where
 impl<T: RealField + Copy, S: Dim, Z: Dim, U: Dim> BayesianFilter<T, S, Z, U>
     for ParticleFilter<T, S, Z, U>
 where
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, Z>
-        + Allocator<T, S, S>
-        + Allocator<T, Z, Z>
-        + Allocator<T, Z, S>
-        + Allocator<T, S, U>
-        + Allocator<T, U, U>
-        + Allocator<T, Const<1>, S>
-        + Allocator<T, Const<1>, Z>,
-    Standard: Distribution<T>,
+    DefaultAllocator: Allocator<S>
+        + Allocator<U>
+        + Allocator<Z>
+        + Allocator<S, S>
+        + Allocator<Z, Z>
+        + Allocator<Z, S>
+        + Allocator<S, U>
+        + Allocator<U, U>
+        + Allocator<Const<1>, S>
+        + Allocator<Const<1>, Z>,
+    StandardUniform: Distribution<T>,
     StandardNormal: Distribution<T>,
 {
     fn update_estimate(&mut self, u: &OVector<T, U>, z: &OVector<T, Z>, dt: T) {
@@ -120,7 +120,7 @@ where
 /// S : State Size, Z: Observation Size, U: Input Size
 pub struct ParticleFilterKnownCorrespondences<T: RealField, S: Dim, Z: Dim, U: Dim>
 where
-    DefaultAllocator: Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Z, Z>,
+    DefaultAllocator: Allocator<S> + Allocator<S, S> + Allocator<Z, Z>,
 {
     q: OMatrix<T, Z, Z>,
     landmarks: FxHashMap<u32, OVector<T, S>>,
@@ -132,9 +132,8 @@ where
 impl<T: RealField + Copy, S: Dim, Z: Dim, U: Dim> ParticleFilterKnownCorrespondences<T, S, Z, U>
 where
     StandardNormal: Distribution<T>,
-    Standard: Distribution<T>,
-    DefaultAllocator:
-        Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Z, Z> + Allocator<T, Const<1>, S>,
+    StandardUniform: Distribution<T>,
+    DefaultAllocator: Allocator<S> + Allocator<S, S> + Allocator<Z, Z> + Allocator<Const<1>, S>,
 {
     pub fn new(
         initial_noise: OMatrix<T, S, S>,
@@ -165,17 +164,17 @@ impl<T: RealField + Copy, S: Dim, Z: Dim, U: Dim> BayesianFilterKnownCorresponde
     for ParticleFilterKnownCorrespondences<T, S, Z, U>
 where
     StandardNormal: Distribution<T>,
-    Standard: Distribution<T>,
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, Z>
-        + Allocator<T, S, S>
-        + Allocator<T, Z, Z>
-        + Allocator<T, Z, S>
-        + Allocator<T, S, U>
-        + Allocator<T, U, U>
-        + Allocator<T, Const<1>, S>
-        + Allocator<T, Const<1>, Z>,
+    StandardUniform: Distribution<T>,
+    DefaultAllocator: Allocator<S>
+        + Allocator<U>
+        + Allocator<Z>
+        + Allocator<S, S>
+        + Allocator<Z, Z>
+        + Allocator<Z, S>
+        + Allocator<S, U>
+        + Allocator<U, U>
+        + Allocator<Const<1>, S>
+        + Allocator<Const<1>, Z>,
 {
     fn update_estimate(
         &mut self,
@@ -223,7 +222,7 @@ fn gaussian_estimate<T: RealField + Copy, S: Dim>(
     particules: &[OVector<T, S>],
 ) -> GaussianState<T, S>
 where
-    DefaultAllocator: Allocator<T, S> + Allocator<T, S, S> + Allocator<T, Const<1>, S>,
+    DefaultAllocator: Allocator<S> + Allocator<S, S> + Allocator<Const<1>, S>,
 {
     let shape = particules[0].shape_generic();
     let x = particules
@@ -244,8 +243,8 @@ fn resampling<T: RealField + Copy, S: Dim>(
     weights: &[T],
 ) -> Vec<OVector<T, S>>
 where
-    DefaultAllocator: Allocator<T, S>,
-    Standard: Distribution<T>,
+    DefaultAllocator: Allocator<S>,
+    StandardUniform: Distribution<T>,
 {
     let cum_weight: Vec<T> = weights
         .iter()
@@ -257,10 +256,10 @@ where
     let weight_tot = *cum_weight.last().unwrap();
 
     // sampling
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     (0..particules.len())
         .map(|_| {
-            let rng_nb = rng.gen::<T>() * weight_tot;
+            let rng_nb = rng.random::<T>() * weight_tot;
             for (i, p) in particules.iter().enumerate() {
                 if (&cum_weight)[i] > rng_nb {
                     return p.clone();
@@ -276,13 +275,13 @@ fn resampling_sort<T: RealField + Copy, S: Dim>(
     weights: &[T],
 ) -> Vec<OVector<T, S>>
 where
-    DefaultAllocator: Allocator<T, S>,
-    Standard: Distribution<T>,
+    DefaultAllocator: Allocator<S>,
+    StandardUniform: Distribution<T>,
 {
     let total_weight: T = weights.iter().fold(T::zero(), |a, b| a + *b);
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut draws: Vec<T> = (0..particules.len())
-        .map(|_| rng.gen::<T>() * total_weight)
+        .map(|_| rng.random::<T>() * total_weight)
         .collect();
     resample(&mut draws, total_weight, particules, weights)
 }
@@ -292,14 +291,15 @@ fn resampling_stratified<T: RealField + Copy, S: Dim>(
     weights: &[T],
 ) -> Vec<OVector<T, S>>
 where
-    DefaultAllocator: Allocator<T, S>,
-    Standard: Distribution<T>,
+    DefaultAllocator: Allocator<S>,
+    StandardUniform: Distribution<T>,
 {
     let total_weight: T = weights.iter().fold(T::zero(), |a, b| a + *b);
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut draws: Vec<T> = (0..particules.len())
         .map(|i| {
-            (T::from_usize(i).unwrap() + rng.gen::<T>()) / T::from_usize(particules.len()).unwrap()
+            (T::from_usize(i).unwrap() + rng.random::<T>())
+                / T::from_usize(particules.len()).unwrap()
                 * total_weight
         })
         .collect();
@@ -311,12 +311,12 @@ fn resampling_systematic<T: RealField + Copy, S: Dim>(
     weights: &[T],
 ) -> Vec<OVector<T, S>>
 where
-    DefaultAllocator: Allocator<T, S>,
-    Standard: Distribution<T>,
+    DefaultAllocator: Allocator<S>,
+    StandardUniform: Distribution<T>,
 {
     let total_weight: T = weights.iter().fold(T::zero(), |a, b| a + *b);
-    let mut rng = rand::thread_rng();
-    let draw = rng.gen::<T>();
+    let mut rng = rand::rng();
+    let draw = rng.random::<T>();
     let mut draws: Vec<T> = (0..particules.len())
         .map(|i| {
             (T::from_usize(i).unwrap() + draw) / T::from_usize(particules.len()).unwrap()
@@ -333,8 +333,8 @@ fn resample<T: RealField + Copy, S: Dim>(
     weights: &[T],
 ) -> Vec<OVector<T, S>>
 where
-    DefaultAllocator: Allocator<T, S>,
-    Standard: Distribution<T>,
+    DefaultAllocator: Allocator<S>,
+    StandardUniform: Distribution<T>,
 {
     draws.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
     let mut index = 0;

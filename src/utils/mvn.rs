@@ -1,7 +1,7 @@
 use nalgebra::{
     allocator::Allocator, Const, DefaultAllocator, Dim, OMatrix, OVector, RealField, U1,
 };
-use rand::distributions::Distribution;
+use rand::distr::Distribution;
 
 #[derive(Debug, Clone)]
 pub enum ErrorType {
@@ -29,7 +29,7 @@ impl std::fmt::Display for Error {
 
 pub struct MultiVariateNormal<T: RealField, D: Dim>
 where
-    DefaultAllocator: Allocator<T, D> + Allocator<T, D, D>,
+    DefaultAllocator: Allocator<D> + Allocator<D, D>,
 {
     mean: OVector<T, D>,
     precision: OMatrix<T, D, D>,
@@ -40,7 +40,7 @@ where
 impl<T: RealField, D: Dim> MultiVariateNormal<T, D>
 where
     rand_distr::StandardNormal: Distribution<T>,
-    DefaultAllocator: Allocator<T, D> + Allocator<T, D, D> + Allocator<T, Const<1>, D>,
+    DefaultAllocator: Allocator<D> + Allocator<D, D> + Allocator<Const<1>, D>,
 {
     pub fn new(mean: &OVector<T, D>, covariance: &OMatrix<T, D, D>) -> Result<Self, Error> {
         let Some(covariance_cholesky) = covariance.clone().cholesky() else {
@@ -71,7 +71,7 @@ where
 
     pub fn sample(&self) -> OVector<T, D> {
         // https://juanitorduz.github.io/multivariate_normal/
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let dim = self.mean.shape_generic().0;
         let u = OVector::<T, D>::from_distribution_generic(
             dim,

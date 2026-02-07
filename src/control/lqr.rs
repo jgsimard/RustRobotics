@@ -5,8 +5,7 @@ use nalgebra::{allocator::Allocator, DefaultAllocator, Dim, OMatrix, RealField};
 
 pub struct LinearTimeInvariantModel<T: RealField, S: Dim, U: Dim>
 where
-    DefaultAllocator:
-        Allocator<T, S, S> + Allocator<T, S, U> + Allocator<T, U, S> + Allocator<T, U, U>,
+    DefaultAllocator: Allocator<S, S> + Allocator<S, U> + Allocator<U, S> + Allocator<U, U>,
 {
     pub A: OMatrix<T, S, S>,
     pub B: OMatrix<T, S, U>,
@@ -20,12 +19,12 @@ pub fn lqr<T: RealField + Copy, S: Dim, U: Dim>(
     epsilon: T,
 ) -> Option<OMatrix<T, U, S>>
 where
-    DefaultAllocator: Allocator<T, S>
-        + Allocator<T, U>
-        + Allocator<T, S, S>
-        + Allocator<T, S, U>
-        + Allocator<T, U, S>
-        + Allocator<T, U, U>,
+    DefaultAllocator: Allocator<S>
+        + Allocator<U>
+        + Allocator<S, S>
+        + Allocator<S, U>
+        + Allocator<U, S>
+        + Allocator<U, U>,
 {
     let A = &linear_model.A;
     let A_T = &A.transpose();

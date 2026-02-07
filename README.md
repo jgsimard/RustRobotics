@@ -1,6 +1,6 @@
 # RustRobotics
 
-This package is a rust implementation of robotics algorithms. So far, the main source is the book [Probabilistic Robotics](https://mitpress.mit.edu/9780262201629/probabilistic-robotics/). I plan to have algorithms implementations in the `src` folder and the algorithms use cases in the `examples` folder. I plan to have python bindings using [pyo3](https://github.com/PyO3/pyo3)/[maturin](https://github.com/PyO3/maturin). I am also implementing the algorithms in python using [JAX](https://jax.readthedocs.io/en/latest/) in this [repo](https://github.com/jgsimard/jaxrobot).
+This package is a rust implementation of robotics algorithms. So far, the main source is the book [Probabilistic Robotics](https://mitpress.mit.edu/9780262201629/probabilistic-robotics/). Algorithms implementations are in the `src` folder and use cases in the `examples` folder.
 
 ## Table of Contents
 

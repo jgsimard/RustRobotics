@@ -6,13 +6,16 @@ use nalgebra::{
     AbstractRotation, DVector, Isometry, Isometry2, Isometry3, Matrix2, Matrix2x3, Matrix3,
     Matrix6, SMatrix, SVector, UnitComplex, Vector2, Vector3,
 };
-use plotpy::{Curve, Plot};
+use plotters::prelude::*;
 use rayon::prelude::*;
-use russell_lab::Vector;
-use russell_sparse::prelude::*;
 use rustc_hash::FxHashMap;
 use std::error::Error;
 use std::path::Path;
+
+use faer::linalg::solvers::Solve;
+use faer::mat::MatRef;
+use faer::sparse::{SparseColMat, Triplet};
+use faer::Side;
 
 use crate::mapping::g2o::parse_g2o;
 use crate::mapping::se2_se3::{jacobian_so3, skew, skew_m_and_mult_parts};
@@ -104,43 +107,37 @@ impl<T> EdgeSE3<T> {
 }
 
 pub struct SparseLinearSystem {
-    pub H: SparseMatrix,
-    pub b: Vector,
+    pub triplets: Vec<Triplet<usize, usize, f64>>,
+    pub b: DVector<f64>,
+    pub len: usize,
 }
 
 impl SparseLinearSystem {
     pub fn new(len: usize) -> SparseLinearSystem {
-        let H = SparseMatrix::new_coo(
+        SparseLinearSystem {
+            triplets: Vec::with_capacity(len * 10), // Heuristic allocation
+            b: DVector::zeros(len),
             len,
-            len,
-            len * len,
-            Some(Symmetry::PositiveDefinite(Storage::Full)),
-            false,
-        )
-        .unwrap();
-        let b = Vector::new(len);
-        SparseLinearSystem { H, b }
+        }
     }
     pub fn solve(&mut self) -> Result<DVector<f64>, Box<dyn Error>> {
-        // Russell Sparse (SuiteSparse wrapper) is much faster then nalgebra_sparse
-        let n = self.b.dim();
-        let mut solution = Vector::new(n);
+        let H =
+            SparseColMat::<usize, f64>::try_new_from_triplets(self.len, self.len, &self.triplets)
+                .map_err(|_| "Failed to create sparse matrix")?;
 
-        // allocate solver
-        let mut umfpack = SolverUMFPACK::new()?;
+        let b_view = MatRef::<'_, f64>::from_column_major_slice(self.b.as_slice(), self.len, 1);
 
-        // parameters
-        let mut params = LinSolParams::new();
-        params.verbose = false;
-        params.compute_determinant = true;
+        let x = H
+            .sp_cholesky(Side::Lower)
+            .map_err(|_| "Matrix is not positive definite (ensure the graph is constrained)")?
+            .solve(b_view);
 
-        // call factorize
-        umfpack.factorize(&mut self.H, Some(params))?;
+        let mut solution = DVector::zeros(self.len);
+        for i in 0..self.len {
+            solution[i] = x[(i, 0)];
+        }
 
-        // calculate the solution
-        umfpack.solve(&mut solution, &self.H, &self.b, false)?;
-
-        Ok(DVector::from_vec(solution.as_data().clone()))
+        Ok(solution)
     }
 }
 
@@ -181,38 +178,37 @@ fn update_linear_system<const X1: usize, const X2: usize>(
     let b_j = B.transpose() * omega * e;
 
     // Update the linear system
-    set_matrix(&mut sls.H, from, from, &H_ii)?;
-    set_matrix(&mut sls.H, from, to, &H_ij)?;
-    set_matrix(&mut sls.H, to, from, &H_ji)?;
-    set_matrix(&mut sls.H, to, to, &H_jj)?;
+    set_matrix(sls, from, from, &H_ii);
+    set_matrix(sls, from, to, &H_ij);
+    set_matrix(sls, to, from, &H_ji);
+    set_matrix(sls, to, to, &H_jj);
 
-    set_vector(&mut sls.b, from, &b_i);
-    set_vector(&mut sls.b, to, &b_j);
+    set_vector(sls, from, &b_i);
+    set_vector(sls, to, &b_j);
     Ok(())
 }
 
 fn set_matrix<const R: usize, const C: usize>(
-    A: &mut SparseMatrix,
+    sls: &mut SparseLinearSystem,
     i: usize,
     j: usize,
     m: &SMatrix<f64, R, C>,
-) -> Result<(), Box<dyn Error>> {
+) {
     for ii in 0..R {
         for jj in 0..C {
-            A.put(i + ii, j + jj, m.fixed_view::<1, 1>(ii, jj).x)?;
+            sls.triplets.push(Triplet::new(i + ii, j + jj, m[(ii, jj)]));
         }
     }
-    Ok(())
 }
 
-fn set_vector<const D: usize>(v: &mut Vector, i: usize, source: &SVector<f64, D>) {
+fn set_vector<const D: usize>(sls: &mut SparseLinearSystem, i: usize, source: &SVector<f64, D>) {
     for ii in 0..D {
-        v.set(i + ii, source.fixed_view::<1, 1>(ii, 0).x + v.get(i + ii))
+        sls.b[i + ii] += source[ii];
     }
 }
 
 impl<'a> PoseGraph<'a> {
-    pub fn new(file_path: &str, solver: PoseGraphSolver) -> Result<PoseGraph, Box<dyn Error>> {
+    pub fn new(file_path: &str, solver: PoseGraphSolver) -> Result<PoseGraph<'_>, Box<dyn Error>> {
         let (len, edges, lut, nodes) = parse_g2o(file_path)?;
         let name = Path::new(file_path).file_stem().unwrap().to_str().unwrap();
         Ok(PoseGraph {
@@ -329,9 +325,11 @@ impl<'a> PoseGraph<'a> {
 
                     if need_to_add_prior {
                         const V: f64 = 10000000.0;
-                        sls.H.put(from_idx, from_idx, V)?;
-                        sls.H.put(from_idx + 1, from_idx + 1, V)?;
-                        sls.H.put(from_idx + 2, from_idx + 2, V)?;
+                        sls.triplets.push(Triplet::new(from_idx, from_idx, V));
+                        sls.triplets
+                            .push(Triplet::new(from_idx + 1, from_idx + 1, V));
+                        sls.triplets
+                            .push(Triplet::new(from_idx + 2, from_idx + 2, V));
                         need_to_add_prior = false;
                     }
                 }
@@ -358,10 +356,11 @@ impl<'a> PoseGraph<'a> {
                 Edge::SE3_XYZ => todo!(),
             }
         }
-        sls.b.map(|x| -x);
+        sls.b *= -1.0;
+
         if self.solver == PoseGraphSolver::LevenbergMarquardt {
             for i in 0..self.len {
-                sls.H.put(i, i, lambda)?;
+                sls.triplets.push(Triplet::new(i, i, lambda));
             }
         }
 
@@ -374,59 +373,80 @@ impl<'a> PoseGraph<'a> {
 
     pub fn plot(&self) -> Result<(), Box<dyn Error>> {
         // poses + landmarks
-        let mut landmarks_present = false;
-        let mut poses_seq = Vec::new();
-        let mut poses = Curve::new();
-        poses
-            .set_line_style("None")
-            .set_marker_color("b")
-            .set_marker_style("o");
+        let path = format!("img/{}-{}-{:?}.svg", self.name, self.iteration, self.solver);
+        let root = SVGBackend::new(&path, (800, 800)).into_drawing_area();
+        root.fill(&WHITE)?;
 
-        let mut landmarks = Curve::new();
-        landmarks
-            .set_line_style("None")
-            .set_marker_color("r")
-            .set_marker_style("*");
-        poses.points_begin();
-        landmarks.points_begin();
-        for (id, node) in self.nodes.iter() {
-            match *node {
-                Node::SE2(n) => {
-                    poses.points_add(n.translation.x, n.translation.y);
-                    poses_seq.push((id, n.translation.vector));
-                }
-                Node::XY(n) => {
-                    landmarks.points_add(n.x, n.y);
-                    landmarks_present = true;
-                }
-                Node::SE3(_) => todo!(),
-                Node::XYZ(_) => todo!(),
+        // Find plot bounds (min/max of your nodes)
+        let mut min_x = f64::MAX;
+        let mut max_x = f64::MIN;
+        let mut min_y = f64::MAX;
+        let mut max_y = f64::MIN;
+        for node in self.nodes.values() {
+            let (x, y) = match node {
+                Node::SE2(n) => (n.translation.x, n.translation.y),
+                Node::XY(n) => (n.x, n.y),
+                _ => continue,
+            };
+            min_x = min_x.min(x);
+            max_x = max_x.max(x);
+            min_y = min_y.min(y);
+            max_y = max_y.max(y);
+        }
+
+        let padding = 1.0;
+        let mut chart = ChartBuilder::on(&root).margin(10).build_cartesian_2d(
+            (min_x - padding)..(max_x + padding),
+            (min_y - padding)..(max_y + padding),
+        )?;
+
+        chart
+            .configure_mesh()
+            .disable_x_mesh()
+            .disable_y_mesh()
+            .draw()?;
+
+        chart.draw_series(self.nodes.values().filter_map(|node| {
+            if let Node::XY(n) = node {
+                Some(Circle::new((n.x, n.y), 3, RED.filled()))
+            } else {
+                None
             }
-        }
-        poses.points_end();
-        landmarks.points_end();
+        }))?;
 
-        poses_seq.sort_by(|a, b| (a.0).partial_cmp(b.0).unwrap());
-        let mut poses_seq_curve = Curve::new();
-        poses_seq_curve.set_line_color("r");
+        chart.draw_series(self.nodes.values().filter_map(|node| {
+            if let Node::SE2(n) = node {
+                Some(Circle::new(
+                    (n.translation.x, n.translation.y),
+                    2,
+                    BLUE.filled(),
+                ))
+            } else {
+                None
+            }
+        }))?;
 
-        poses_seq_curve.points_begin();
-        for (_, p) in poses_seq {
-            poses_seq_curve.points_add(p.x, p.y);
-        }
-        poses_seq_curve.points_end();
+        let mut poses_seq: Vec<_> = self
+            .nodes
+            .iter()
+            .filter_map(|(id, node)| {
+                if let Node::SE2(n) = node {
+                    Some((*id, n))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        poses_seq.sort_by_key(|a| a.0);
 
-        // add features to plot
-        let mut plot = Plot::new();
+        chart.draw_series(LineSeries::new(
+            poses_seq
+                .iter()
+                .map(|(_, n)| (n.translation.x, n.translation.y)),
+            &RED,
+        ))?;
 
-        plot.add(&poses).add(&poses_seq_curve);
-        if landmarks_present {
-            plot.add(&landmarks);
-        }
-        // save figure
-        plot.set_equal_axes(true)
-            // .set_figure_size_points(600.0, 600.0)
-            .save(format!("img/{}-{}-{:?}.svg", self.name, self.iteration, self.solver).as_str())?;
+        root.present()?;
         Ok(())
     }
 }

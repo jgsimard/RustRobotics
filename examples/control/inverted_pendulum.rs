@@ -1,6 +1,6 @@
 use dialoguer::{theme::ColorfulTheme, Select};
 use nalgebra::{Const, Matrix1, Matrix4, Matrix4x1, Vector4};
-use plotpy::{Curve, Plot};
+use plotters::prelude::*;
 use std::error::Error;
 
 extern crate robotics;
@@ -88,55 +88,87 @@ fn main() -> Result<(), Box<dyn Error>> {
     // let algo = algos[algo_idx];
 
     // get data
-    let (states, commands) = run().expect("unable to run");
+    let (states, _commands) = run().expect("unable to run");
 
     // Create output directory if it didnt exist
     std::fs::create_dir_all("./img")?;
 
-    let path = match algo_idx {
+    let path_prefix = match algo_idx {
         0 => "lqr",
         1 => "mpc",
         _ => unreachable!(),
     };
 
-    let time = (0..states.len())
-        .map(|i| (i as f64) / (states.len() as f64) * 5.0)
-        .collect::<Vec<f64>>();
+    let full_path = format!("img/{}-{}.svg", path_prefix, "done");
 
-    let mut curve_x = Curve::new();
-    curve_x
-        .set_label("x")
-        .draw(&time, &states.iter().map(|s| s.x).collect());
+    let root = SVGBackend::new(&full_path, (1000, 1000)).into_drawing_area();
+    root.fill(&WHITE)?;
 
-    let mut curve_theta = Curve::new();
-    curve_theta
-        .set_label("theta")
-        .draw(&time, &states.iter().map(|s| s.z).collect());
+    let time: Vec<f64> = (0..states.len())
+        .map(|i| (i as f64) * 0.01) // dt = 0.01
+        .collect();
 
-    let mut curve_x_dot = Curve::new();
-    curve_x_dot
-        .set_label("x dot")
-        .draw(&time, &states.iter().map(|s| s.y).collect());
+    let mut min_y = states.iter().map(|s| s.min()).fold(f64::INFINITY, f64::min);
+    let mut max_y = states
+        .iter()
+        .map(|s| s.max())
+        .fold(f64::NEG_INFINITY, f64::max);
 
-    let mut curve_theta_dot = Curve::new();
-    curve_theta_dot
-        .set_label("theta dot")
-        .draw(&time, &states.iter().map(|s| s.w).collect());
+    min_y -= 0.1;
+    max_y += 0.1;
 
-    let mut curve_u = Curve::new();
-    curve_u.set_label("u").draw(&time, &commands);
+    let mut chart = ChartBuilder::on(&root)
+        .caption(
+            format!("Inverted Pendulum - {}", algos[algo_idx]),
+            ("sans-serif", 40),
+        )
+        .margin(20)
+        .x_label_area_size(40)
+        .y_label_area_size(40)
+        .build_cartesian_2d(0f64..5f64, min_y..max_y)?;
 
-    // add features to plot
-    let mut plot = Plot::new();
+    chart
+        .configure_mesh()
+        .x_desc("Time [s]")
+        .y_desc("State Value")
+        .draw()?;
 
-    plot.add(&curve_x)
-        .add(&curve_theta)
-        .add(&curve_x_dot)
-        .add(&curve_theta_dot)
-        // .add(&curve_u)
-        .legend()
-        .set_equal_axes(true) // save figure
-        .set_figure_size_points(1000.0, 1000.0)
-        .save(format!("img/{}-{}.svg", path, "done").as_str())?;
+    let state_configs = vec![
+        (states.iter().map(|s| s.x).collect::<Vec<_>>(), &BLUE, "x"),
+        (
+            states.iter().map(|s| s.y).collect::<Vec<_>>(),
+            &CYAN,
+            "x dot",
+        ),
+        (
+            states.iter().map(|s| s.z).collect::<Vec<_>>(),
+            &RED,
+            "theta",
+        ),
+        (
+            states.iter().map(|s| s.w).collect::<Vec<_>>(),
+            &GREEN,
+            "theta dot",
+        ),
+    ];
+
+    for (data, color, label) in state_configs {
+        chart
+            .draw_series(LineSeries::new(
+                time.iter().zip(data.iter()).map(|(&t, &v)| (t, v)),
+                color.stroke_width(2),
+            ))?
+            .label(label)
+            .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], color.clone()));
+    }
+
+    chart
+        .configure_series_labels()
+        .background_style(&WHITE.mix(0.8))
+        .border_style(&BLACK)
+        .draw()?;
+
+    root.present()?;
+
     Ok(())
 }
