@@ -36,7 +36,7 @@ cargo run --example localization_landmarks
 
 ### Pose Graph Optimization
 
-This algorithm uses the sparse solver in [Russel](https://github.com/cpmech/russell/tree/main/russell_sparse) which wraps [SuiteSparse](https://people.engr.tamu.edu/davis/suitesparse.html) so follow the installation instructions. [Algorithm](src/mapping/pose_graph_optimization.rs), [Example](examples/mapping/pose_graph_optimization.rs), [Source](https://www.researchgate.net/profile/Mohamed-Mourad-Lafifi/post/What_is_the_relationship_between_GraphSLAM_and_Pose_Graph_SLAM/attachment/613b3f63647f3906fc978272/AS%3A1066449581928450%401631272802870/download/A+tutorial+on+graph-based+SLAM+_+Grisetti2010.pdf)
+This algorithm uses the sparse solver in [Faer](https://codeberg.org/sarah-quinones/faer). [Algorithm](src/mapping/pose_graph_optimization.rs), [Example](examples/mapping/pose_graph_optimization.rs), [Source](https://www.researchgate.net/profile/Mohamed-Mourad-Lafifi/post/What_is_the_relationship_between_GraphSLAM_and_Pose_Graph_SLAM/attachment/613b3f63647f3906fc978272/AS%3A1066449581928450%401631272802870/download/A+tutorial+on+graph-based+SLAM+_+Grisetti2010.pdf)
 
 ```bash
 cargo run --example pose_graph_optimization
@@ -76,17 +76,3 @@ cargo run --example pose_graph_optimization
 - [A tutorial on Graph-Based SLAM](https://www.researchgate.net/profile/Mohamed-Mourad-Lafifi/post/What_is_the_relationship_between_GraphSLAM_and_Pose_Graph_SLAM/attachment/613b3f63647f3906fc978272/AS%3A1066449581928450%401631272802870/download/A+tutorial+on+graph-based+SLAM+_+Grisetti2010.pdf)
 - [A tutorial on SE(3) transformation parameterizations and on-manifold optimization](https://arxiv.org/abs/2103.15980)
 - [Courses from Dr. Cyrill Stachniss](https://www.ipb.uni-bonn.de/teaching)
-
-## Compilation issues
-
-For plotters
-
-```bash
-sudo apt install fontconfig libfontconfig libfontconfig1-dev
-```
-
-For Russel
-
-```bash
-sudo apt install liblapacke-dev libmumps-seq-dev libopenblas-dev libsuitesparse-dev
-```
